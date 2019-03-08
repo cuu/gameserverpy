@@ -172,6 +172,8 @@ def start_tcp_server():
                                     parent_conn, child_conn = Pipe()
                                     
                                     connection.sendall("OK\n") ##tell the client to continue
+                                    connection.close()
+                                    break
                         except Exception,e:
                             print(str(e))
                             connection.sendall("Error:"+str(e))
