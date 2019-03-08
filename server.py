@@ -10,6 +10,17 @@ PORT_NUMBER = 8080
 
 DT = pygame.time.Clock().tick(40)   # fps in ms,eg:50
 
+KeyLog = {}
+GameShellKeys = {}
+GameShellKeys["left"] = pygame.K_LEFT
+GameShellKeys["right"] = pygame.K_RIGHT
+GameShellKeys["up"]   = pygame.K_UP
+GameShellKeys["down"] = pygame.K_DOWN
+GameShellKeys["u"]   = pygame.K_u  ## GamePad X
+GameShellKeys["i"]   = pygame.K_i  ## GamePad Y
+GameShellKeys["return"] = pygame.K_RETURN ##GamePad start
+GameShellKeys["escape"] = pygame.K_ESCAPE ##GamePad menu
+
 class PygameThread(lisp.Lisper):
     Width = 320
     Height = 240
@@ -18,15 +29,28 @@ class PygameThread(lisp.Lisper):
     DT = pygame.time.Clock().tick(30)
     font1 = None
     font2 = None
-    bg_color = pygame.Color(255,255,255)
+    bg_color = pygame.Color(0,0,0)
    
+    OffsetX = 0
+    OffsetY = 0
+
     def __init__(self):
         lisp.Lisper.__init__(self) 
-        self.intern('api.print', lisp.SyntaxObject(self.api_print))
-        self.intern('api.cls', lisp.SyntaxObject(self.api_cls))
-        self.intern('api.flip', lisp.SyntaxObject(self.api_flip))
-  
-    def api_print(self,env,args):
+        self.intern('draw.print', lisp.SyntaxObject(self.draw_print))
+        self.intern('draw.cls', lisp.SyntaxObject(self.draw_cls))
+        self.intern('draw.flip', lisp.SyntaxObject(self.draw_flip))
+        self.intern('draw.btn', lisp.SyntaxObject(self.draw_btn))
+        self.intern('draw.point', lisp.SyntaxObject(self.draw_point))
+        self.intern('draw.scroll', lisp.SyntaxObject(self.draw_scroll))
+    
+    def draw_reset(self):
+        self.OffsetX = 0
+        self.OffsetY = 0
+
+    def draw_scroll(self,dy):
+        self.OffsetY+=dy
+
+    def draw_print(self,env,args):
         if len(args) < 3:
             return
         assert self.Inited== True,"Not inited"
@@ -34,16 +58,16 @@ class PygameThread(lisp.Lisper):
         text  = args[0].eval(env)
         x     = args[1].eval(env)
         y     = args[2].eval(env)
-        color = (10,0,0)
+        color = (255,255,0)
         #print("api_print")
         imgText = self.font1.render(text,True,color)
 
         if self.Screen.get_locked() == False:
-            self.Screen.blit(imgText,(int(x),int(y)))
+            self.Screen.blit(imgText,(int(x)+self.OffsetX,int(y)+self.OffsetY))
 
         return "OK"
 
-    def api_cls(self,env,args):
+    def draw_cls(self,env,args):
         assert self.Inited== True,"Not inited"
         
         frame = 1
@@ -56,12 +80,43 @@ class PygameThread(lisp.Lisper):
         #print("api_cls")
         return "OK"
     
-    def api_flip(self,env,args):
-        self.Screen.lock()
+    def draw_flip(self,env,args):
         pygame.display.flip()
-        self.Screen.unlock()
         return "OK"
-         
+    
+    def draw_btn(self,env,args):
+        assert self.Inited== True,"Not inited"
+        if len(args) < 2:
+            return "FALSE"
+        
+        keycode_string = args[0].eval(env)
+        player_idx     = args[1].eval(env)
+        if keycode_string in GameShellKeys: 
+            keycode = GameShellKeys[keycode_string]
+            
+            if keycode in KeyLog and  KeyLog[keycode] > 0:
+                return "TRUE"
+            else:
+                return "FALSE"        
+        else:
+            return "FALSE"
+    
+    def draw_point(self,env,args):
+        assert self.Inited== True,"Not inited"
+        if len(args) < 6:
+            return "Error,draw_point args"
+       
+        x = args[0].eval(env)
+        y = args[1].eval(env)
+        r = args[2].eval(env)
+        g = args[3].eval(env)
+        b = args[4].eval(env)
+        a = args[5].eval(env) 
+        
+        self.Screen.set_at(( int(x)+self.OffsetX,int(y)+self.OffsetY), (int(r),int(g),int(b),int(a)))
+        
+        return "OK"
+ 
     def print_text(self,font,x,y,text,color=(255,255,255)):
         imgText = font.render(text,True,color)
         if self.Screen.get_locked() == False:
@@ -80,7 +135,7 @@ class PygameThread(lisp.Lisper):
             self.Inited = True
 
         SCREEN_SIZE = (self.Width,self.Height)
-        self.bg_color = pygame.Color(255,255,255)
+        self.bg_color = pygame.Color(0,0,0)
         self.Screen = pygame.display.set_mode(SCREEN_SIZE, 0, 32)
         pygame.event.set_allowed(None)
         pygame.event.set_allowed([pygame.KEYDOWN,pygame.KEYUP])
@@ -98,7 +153,7 @@ class PygameThread(lisp.Lisper):
             self.child_conn.send(ret)
 
     def run(self):
-        global DT
+        global DT,KeyLog
         try:
             while self.Inited: 
                 event = pygame.event.poll()
@@ -107,6 +162,7 @@ class PygameThread(lisp.Lisper):
                     return
     
                 if event.type == pygame.KEYDOWN:
+                    KeyLog[event.key] = 1
                     if event.key == pygame.K_p:
                         self.Screen.fill((255,255,255))
                         self.print_text(self.font1,40,30,"Let see!")
@@ -114,7 +170,9 @@ class PygameThread(lisp.Lisper):
                     if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
                         print("quit ....")
                         return             
-            
+                if event.type == pygame.KEYUP:
+                     KeyLog[event.key] = 0
+                
     #            pygame.time.delay(self.DT)
                 pygame.time.delay(DT)
         finally:

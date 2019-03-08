@@ -23,13 +23,3 @@ function _draw()
  print(msg,x,y,8+dx+dy)
 end
 
-_init()
-_update()
-
-while true do
-	_update()
-	_draw()
-	sleep(0.016)
-	flip()	
-end
-

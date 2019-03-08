@@ -49,7 +49,8 @@ function new_sandbox()
 		print=api.print,
 		cls  = api.cls,
 		sleep = api.sleep,
-		flip  = api.flip
+		flip  = api.flip,
+		btn   = api.btn
 	}
 end
 
@@ -81,7 +82,25 @@ function load_lua_file(file)
 	
 	return lua
 end
+
+local frames = 0
+local frame_time = 1/api.pico8.fps
+
+
 	
+function draw(cart)
+	
+	while true do
+		if cart._update() then cart._update() end
+		if cart._draw()   then cart._draw() end
+	
+		api.sleep(frame_time)
+		api.flip()
+		frames= frames+1
+	end
+
+end
+
 function main(file)
 	loaded_code = load_lua_file(file)
 
@@ -101,6 +120,10 @@ function main(file)
     else
       log('lua completed')
     end
+
+		if cart._init then cart._init() end
+		
+		draw(cart)
   end
 	
 end
