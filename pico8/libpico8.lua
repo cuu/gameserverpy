@@ -70,7 +70,7 @@ local socket = require("socket")
 local tcp = assert(socket.tcp())
 
 tcp:connect(host, port);
-tcp:settimeout(0.5)
+tcp:settimeout(5)
 
 function safe_format(formatstring,...)	
 	return string.format(formatstring.."\n",...)
@@ -79,15 +79,33 @@ end
 function safe_tcp_send(data)
 	local ret,msg
 	local ret2
-	
+	-- print("safe_tcp_send data is " ,data ,#data)
+  if #data == 0 then 
+    print("data is zero",data)
+    return
+  end
+
+  local datalength = string.format("%08d",#data)
+
+  ret,msg = tcp:send(datalength)
+  if ret ~= nil then
+      ret,msg = tcp:receive("*l")
+      if ret == nil then
+        print("data length header error",ret,msg)
+        os.exit()
+      end
+  end
+
 	ret,msg = tcp:send(data)
+
 	if(ret ~= nil) then
-		ret2 = tcp:receive("*l")
-		return ret2
-	else
-		print("exiting...",msg)
-		os.exit()
+	  	ret2 = tcp:receive("*l")
+	    return ret2
+	  else
+	   	print("exiting...",msg)
+	    os.exit()
 	end
+  
 end
 
 function draw.scroll(dy)
@@ -147,7 +165,7 @@ function send_resource_done()
 end
 
 function send_resource(res_type,res_data)
-  if res_data == nil then 
+  if res_data == nil or #res_data == 0  then 
     return 
   end
 
@@ -156,10 +174,14 @@ function send_resource(res_type,res_data)
   safe_tcp_send(thing)
 
   thing = res_data
-  safe_tcp_send(thing)
+  local ret = safe_tcp_send(thing)
+  if ret == nil then
+    print("the ret of res_data is ", ret,res_type,#res_data)
+  end
 
-  thing = "(res.over)"
-  safe_tcp_send(thing)
+  thing = "(res.over)\n"
+  ret = safe_tcp_send(thing)
+  --print("the ret of res.over is ", ret)
 
 end
 
@@ -409,7 +431,7 @@ function api.load_p8_text(filename)
   local gff_start = data:find('__gff__') 
   if gff_start ~= nil then
     gff_start = gff_start + 7 + #eol_chars
-    local gff_end = data:find('__')
+    local gff_end = data:find('__',gff_start)
     if gff_end == nil then
       gff_end = #data
     else 

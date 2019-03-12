@@ -273,6 +273,7 @@ class PygameThread(lisp.Lisper):
         return "OK"
 
     def res_done(self,env,args):
+
         if self.ConsoleType == "pico8":
             self.Pico8.set_gfx()
             self.Pico8.set_gff()
@@ -447,19 +448,19 @@ class PygameThread(lisp.Lisper):
 
     def read_data_thread(self):
         while self.Inited:
+
             data = self.child_conn.recv()
+
             if self.State == "draw":
-                try:
-                    ret = self.evalstring(data) ## every api must have a return content
-                    self.child_conn.send(ret)
-                except Exception,e:
-                    print("evalstring error")
-                    print(str(e))
-                    return
+                #print("the data is ", data)
+                ret = self.evalstring(data) ## every api must have a return content
+                self.child_conn.send(ret)
+
             else:
                 print("receiving resource",self.Resource,"...")
-                
+                print("the data is :", data)
                 if data.find("(res.over)") >= 0:
+                    print(data)
                     self.State="draw"
                 else:
                     if self.ConsoleType == "pico8":
@@ -507,12 +508,44 @@ def start_pygame(child):
 
     api.run()
 
+
+def recv_all(socket,package_length):
+    ret = ""
+    data = None
+    seg = 4096
+
+    data_left = package_length
+
+    if package_length < seg:
+        data_left = package_length
+
+    while True:
+        #print("data_left: ",data_left,package_length)
+        if data_left >= seg:
+            data = socket.recv(seg)
+            data_left = data_left - len(data)
+        elif data_left > 0 and data_left < seg:
+            data = socket.recv(data_left)
+
+
+        if not data or data_left == 0:
+            if len(ret) == package_length:
+                return ret
+            else:
+                return None
+
+        ret += data
+        if len(ret) >= package_length:
+            break
+
+    return ret
+
 def start_tcp_server():
     pygame_is_running = False
     pygame_process = None
     parent_conn, child_conn = Pipe()
     
-    segment_length = 1024*1024
+    segment_length = 8
 
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -528,12 +561,15 @@ def start_tcp_server():
             try:
                 print >>sys.stderr, 'client connected:', client_address
                 while True:
+
                     data = connection.recv(segment_length) # the line length
-                    ##print >>sys.stderr, 'received "%d"' % len(data)
+                    data_len = int(data,10)
+                    connection.send("OK\n")
+                    #print("data is ",data)
+                    data = recv_all(connection,data_len)
 
-                    data = data.strip()
                     if data:
-
+                        data.strip()
                         try:
                             if pygame_is_running == False:
                                 pygame_process = Process(target=start_pygame,args=(child_conn,))
@@ -560,6 +596,7 @@ def start_tcp_server():
                             connection.sendall("Error:"+str(e))
                     else:
                         break
+
             finally:
                 connection.close()
 

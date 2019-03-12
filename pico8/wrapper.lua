@@ -1,16 +1,8 @@
 require 'strict'
 local api = require 'libpico8'
 
-local loaded_code = nil
-log = print
 
-local function read_file(path)
-    local file = io.open(path, "rb") -- r read mode and b binary mode
-    if not file then return nil end
-    local content = file:read "*a" -- *a or *all reads the whole file
-    file:close()
-    return content
-end
+log = print
 
 local function setfenv(fn, env)
   local i = 1
@@ -50,51 +42,23 @@ function new_sandbox()
 		cls  = api.cls,
 		sleep = api.sleep,
 		flip  = api.flip,
-		btn   = api.btn
+		btn   = api.btn,
+    spr   = api.spr,
+    map   = api.map
 	}
 end
 
 
-function load_lua_file(file)
-	local lua
-	lua = read_file(file)
-
-  -- patch the lua
-  lua = lua:gsub('!=','~=')
-  -- rewrite shorthand if statements eg. if (not b) i=1 j=2
-  lua = lua:gsub('if%s*(%b())%s*([^\n]*)\n',function(a,b)
-    local nl = a:find('\n',nil,true)
-    local th = b:find('%f[%w]then%f[%W]')
-    local an = b:find('%f[%w]and%f[%W]')
-    local o = b:find('%f[%w]or%f[%W]')
-    local ce = b:find('--',nil,true)
-    if not (nl or th or an or o) then 
-      if ce then 
-        local c,t = b:match("(.-)(%s-%-%-.*)")
-        return 'if '..a:sub(2,-2)..' then '..c..' end'..t..'\n'
-      else 
-        return 'if '..a:sub(2,-2)..' then '..b..' end\n'
-      end  
-    end  
-  end) 
-  -- rewrite assignment operators
-  lua = lua:gsub('(%S+)%s*([%+-%*/%%])=','%1 = %1 %2 ')
-	
-	return lua
-end
-
 local frames = 0
 local frame_time = 1/api.pico8.fps
-
-
 	
 function draw(cart)
 	
 	while true do
-		if cart._update() then cart._update() end
-		if cart._draw()   then cart._draw() end
+		if cart._update then cart._update() end
+		if cart._draw   then cart._draw() end
 	
-		api.sleep(frame_time)
+		--api.sleep(frame_time/30)
 		api.flip()
 		frames= frames+1
 	end
@@ -102,10 +66,10 @@ function draw(cart)
 end
 
 function main(file)
-	loaded_code = load_lua_file(file)
+	api.load_p8_text(file)
 
 	local cart = new_sandbox()
-	local ok,f,e = pcall(load,loaded_code)
+	local ok,f,e = pcall(load,api.loaded_code)
   if not ok or f==nil then
     log('=======8<========')
     log(loaded_code)
