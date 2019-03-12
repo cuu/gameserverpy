@@ -1,5 +1,17 @@
-local api = {}
+log = print
+local api = { loaded_code = nil }
+
 local draw = {}
+
+local bit = require('bit')
+
+api.band = bit.band
+api.bor = bit.bor
+api.bxor = bit.bxor
+api.bnot = bit.bnot
+api.shl = bit.lshift
+api.shr = bit.rshift
+
 
 local __keymap = {
   [0] = {
@@ -51,6 +63,7 @@ local pico8 = {
   pal_transparent = {},
 }
 
+api.pico8 = pico8 
 
 local host, port = "127.0.0.1", 8080
 local socket = require("socket")
@@ -96,7 +109,7 @@ function draw.cls(frame)
 end
 
 function draw.flip()
-	local thing = safe_format("(api.flip)")
+	local thing = safe_format("(draw.flip)")
 	return safe_tcp_send(thing)
 end
 
@@ -109,6 +122,47 @@ function draw.btn(codestr,playernumber)
 	local thing = safe_format("(draw.btn \"%s\" %d)", codestr,playernumber)
 	return safe_tcp_send(thing)
 end
+
+function draw.spr(n,x,y,w,h,flip_x,flip_y)
+  local thing = safe_format("(draw.spr %d %d %d %d %d %d %d)", n,x,y,w,h,flip_x,flip_y)
+  return safe_tcp_send(thing)
+
+end
+
+function draw.map(cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
+  local thing = safe_format("(draw.map %d %d %d %d %d %d %d)",cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
+  return safe_tcp_send(thing)
+end
+
+function send_pico8_version(version)
+  local thing = safe_format("(pico8 %d)", version)
+  safe_tcp_send(thing)
+end
+
+function send_resource_done()
+  local thing = "(res.done)"
+
+  safe_tcp_send(thing)
+
+end
+
+function send_resource(res_type,res_data)
+  if res_data == nil then 
+    return 
+  end
+
+  local thing = safe_format("(res \"%s\")", res_type)
+
+  safe_tcp_send(thing)
+
+  thing = res_data
+  safe_tcp_send(thing)
+
+  thing = "(res.over)"
+  safe_tcp_send(thing)
+
+end
+
 
 function api.sleep(sec)
     socket.select(nil, nil, sec)
@@ -250,5 +304,228 @@ function api.stat(x)
   return 0
 end
 
+
+local function read_file(path)
+    local file = io.open(path, "rb") -- r read mode and b binary mode
+    if not file then return nil end
+    local content = file:read "*a" -- *a or *all reads the whole file
+    local size = file:seek("end")
+    file:close()
+    return content,size
+end
+
+function api.load_p8_text(filename)
+  log('Loading',filename)
+
+  local lua = ''
+  local gfxdata = nil
+  local sfxdata = nil
+  local gffdata = nil
+  local musicdata = nil
+  local mapdata = nil 
+
+  pico8.map = {}
+  local __pico_quads = {}
+  for y=0,63 do
+    pico8.map[y] = {}
+    for x=0,127 do
+      pico8.map[y][x] = 0
+    end
+  end
+  -- __pico_spritesheet_data = bmp.newImageData(128,128)
+  pico8.spriteflags = {}
+
+  pico8.sfx = {}
+  for i=0,63 do
+    pico8.sfx[i] = {
+      speed=16,
+      loop_start=0,
+      loop_end=0
+    }
+    for j=0,31 do
+      pico8.sfx[i][j] = {0,0,0,0}
+    end
+  end
+  pico8.music = {}
+  for i=0,63 do
+    pico8.music[i] = {
+      loop = 0,
+      [0] = 1,
+      [1] = 2,
+      [2] = 3,
+      [3] = 4
+    }
+  end
+  local eol_chars = '\n'
+    -- read text p8 code file
+  local data,size = read_file(filename)
+  if not data or size == 0 then
+    error(string.format('Unable to open %s',filename))
+  end
+  local header = 'pico-8 cartridge // http://www.pico-8.com\nversion '
+  local start = data:find('pico%-8 cartridge // http://www.pico%-8.com\nversion ')
+  if start == nil then
+    header = 'pico-8 cartridge // http://www.pico-8.com\r\nversion '
+    start = data:find('pico%-8 cartridge // http://www.pico%-8.com\r\nversion ')
+    if start == nil then
+      error('invalid cart')
+    end
+    eol_chars = '\r\n'
+  else
+    eol_chars = '\n'
+  end
+
+  local next_line = data:find(eol_chars,start+#header)
+  local version_str = data:sub(start+#header,next_line-1)
+  local version = tonumber(version_str)
+  log('version',version)
+
+  -- extract the lua
+  local lua_start = data:find('__lua__') + 7 + #eol_chars
+  local lua_end = data:find('__',lua_start)
+  if lua_end == nil then
+    lua_end = #data
+  else
+    lua_end = lua_end -2
+  end
+
+  lua = data:sub(lua_start,lua_end)
+
+  local gfx_start = data:find('__gfx__') 
+  if gfx_start ~= nil then 
+    gfx_start = gfx_start + 7 + #eol_chars
+
+    local gfx_end = data:find('__',gfx_start)
+    if gfx_end == nil then 
+      gfx_end = #data
+    else
+      gfx_end  = gfx_end - 2
+    end
+
+    gfxdata = data:sub(gfx_start,gfx_end)
+  end 
+
+      -- load the sprite flags
+  local gff_start = data:find('__gff__') 
+  if gff_start ~= nil then
+    gff_start = gff_start + 7 + #eol_chars
+    local gff_end = data:find('__')
+    if gff_end == nil then
+      gff_end = #data
+    else 
+      gff_end = gff_end - 2
+    end
+
+    gffdata = data:sub(gff_start,gff_end)
+  end
+    -- convert the tile data to a table
+
+  local map_start = data:find('__map__') 
+  if map_start ~= nil then 
+    map_start = map_start + 7 + #eol_chars
+
+    local map_end = data:find('__',map_start)
+    if map_end == nil then 
+      map_end = #data
+    else 
+      map_end = map_end- 2
+    end
+
+    mapdata = data:sub(map_start,map_end)
+  end
+
+  local sfx_start = data:find('__sfx__') 
+  if sfx_start ~= nil then 
+    sfx_start = sfx_start + 7 + #eol_chars
+    local sfx_end = data:find('__',sfx_start)
+    if sfx_end == nil then 
+      sfx_end = #data
+    else
+      sfx_end = sfx_end - 2
+    end
+
+    sfxdata = data:sub(sfx_start,sfx_end)
+  end
+
+  --assert(_sfx == 64) --- full is 64 lines
+
+
+
+  local music_start = data:find('__music__') 
+  if music_start ~= nil then
+    music_start = music_start + 9 + #eol_chars
+    local music_end = #data-#eol_chars
+    musicdata = data:sub(music_start,music_end)
+
+  end
+
+
+  -- patch the lua
+  lua = lua:gsub('!=','~=')
+  -- rewrite shorthand if statements eg. if (not b) i=1 j=2
+  lua = lua:gsub('if%s*(%b())%s*([^\n]*)\n',function(a,b)
+    local nl = a:find('\n',nil,true)
+    local th = b:find('%f[%w]then%f[%W]')
+    local an = b:find('%f[%w]and%f[%W]')
+    local o = b:find('%f[%w]or%f[%W]')
+    local ce = b:find('--',nil,true)
+    if not (nl or th or an or o) then
+      if ce then
+        local c,t = b:match("(.-)(%s-%-%-.*)")
+        return 'if '..a:sub(2,-2)..' then '..c..' end'..t..'\n'
+      else
+        return 'if '..a:sub(2,-2)..' then '..b..' end\n'
+      end
+    end
+  end)
+  -- rewrite assignment operators
+  lua = lua:gsub('(%S+)%s*([%+-%*/%%])=','%1 = %1 %2 ')
+
+  log('finished loading cart',filename)
+
+  api.loaded_code = lua
+
+  send_pico8_version(version)
+
+  send_resource("gfx",gfxdata)
+  send_resource("gff",gffdata)
+  send_resource("sfx",sfxdata)
+  send_resource("map",mapdata)
+  send_resource("music",musicdata)
+
+  send_resource_done()
+
+end
+
+function api.spr(n,x,y,w,h,flip_x,flip_y)
+  n = api.flr(n)
+  n = api.flr(n)
+  w = w or 1
+  h = h or 1
+  x = x or 0
+  y = y or 0
+  flip_x = flip_x or 0
+  flip_y = flip_y or 0
+  
+  draw.spr(n,x,y,w,h,flip_x,flip_y)
+
+end
+
+function api.map(cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
+  cel_x = cel_x or 0
+  cel_y = cel_y or 0
+
+  cel_x = api.flr(cel_x)
+  cel_y = api.flr(cel_y)
+  sx = api.flr(sx)
+  sy = api.flr(sy)
+  cel_w = api.flr(cel_w)
+  cel_h = api.flr(cel_h)
+
+  bitmask = bitmask or 0
+
+  draw.map(cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
+
+end
 
 return api

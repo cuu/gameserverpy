@@ -1,6 +1,12 @@
+# -*- coding: utf-8 -*- 
+
 import socket
 import sys
 import pygame
+import math
+
+from beeprint import pp
+
 from threading import Thread
 from multiprocessing import Process,Pipe
 
@@ -21,6 +27,226 @@ GameShellKeys["i"]   = pygame.K_i  ## GamePad Y
 GameShellKeys["return"] = pygame.K_RETURN ##GamePad start
 GameShellKeys["escape"] = pygame.K_ESCAPE ##GamePad menu
 
+
+class Pico8(object):
+    Width = 128
+    Height  = 128
+
+    version = 8
+
+    gfx_surface = None
+    map_matrix = None
+    spriteflags =  None
+    CanvasHWND = None
+    HWND       = None
+    Resource = {}   
+    palette = [
+        (0,0,0,255),
+        (29,43,83,255),
+        (126,37,83,255),
+        (0,135,81,255),
+        (171,82,54,255),
+        (95,87,79,255),
+        (194,195,199,255),
+        (255,241,232,255),
+        (255,0,77,255),
+        (255,163,0,255),
+        (255,240,36,255),
+        (0,231,86,255),
+        (41,173,255,255),
+        (131,118,156,255),
+        (255,119,168,255),
+        (255,204,170,255)]
+
+    draw_palette = []
+    display_palette = []
+    pal_transparent = []
+
+    def __init__(self):
+        self.CanvasHWND = pygame.Surface((self.Width,self.Height))
+        self.gfx_surface = pygame.Surface((self.Width,self.Height))
+        self.map_matrix  = [[0 for x in range(128)] for y in range(64)] 
+        self.spriteflags = [0 for x in range(256)]
+        for i in range(16):
+            self.draw_palette.append(i)
+            if i == 0:
+                self.pal_transparent.append(1)
+            else:
+                self.pal_transparent.append(0)
+
+            self.display_palette.append(self.palette[i])
+
+
+    def set_gff(self): # red=1, orange=2, yellow=4, green=8, blue=16, purple=32, pink=64, peach=128
+        if "gff" not in self.Resource:
+            return
+
+        sprite = 0
+        data = self.Resource["gff"]
+        data_array = data.split("\n")
+        if len(data_array) % 8 == 0:
+            for rowpixel in data_array:
+                if self.version <= 2:
+                    for i in range(0,len(rowpixel)):
+                        v = int(rowpixel[i],16)
+                        self.spriteflags[sprite] = v 
+                        sprite+=1
+                else:                    
+                    for i in range(0,len(rowpixel),2):
+                        v = int(rowpixel[i]+rowpixel[i+1],16)
+                        self.spriteflags[sprite] = v 
+                        sprite+=1
+
+        print("spriteflags:", sprite)
+
+    def set_map(self):
+        col = 0
+        row = 0
+        if "map" not in self.Resource:
+            return
+
+        tiles = 0
+        mapdata = self.Resource["map"]
+        mapdata_array = mapdata.split("\n")
+        if len(mapdata_array) % 8 == 0:
+            for rowpixel in mapdata_array:
+                for i in range(0,len(rowpixel),2):
+                    v = int(rowpixel[i]+rowpixel[i+1],16)
+                    self.map_matrix[row][col] = v
+                    tiles +=1
+                    col = col + 1
+                    if col == self.Width:
+                        col = 0
+                        row = row + 1
+
+        print("set_map ",tiles)
+
+
+
+    def set_shared_map(self):
+        shared = 0
+        if self.version > 3:
+            tx = 0
+            ty = 32
+            for sy in range(64,128):
+                for sx in range(0,127,2):
+                    col = self.gfx_surface.get_at((sx,sy))
+                    r = col.r
+                    lo = int(math.floor(r/16))
+                    col = self.gfx_surface.get_at((sx+1,sy))
+                    r = col.r
+                    hi = int(math.floor(r/16))
+                    v = (hi << 4 ) | lo
+                    
+                    #print(ty,tx)
+                    self.map_matrix[ty][tx] = v
+                    
+                    shared  = shared + 1
+                    tx = tx + 1
+                    if tx == self.Width:
+                        tx = 0
+                        ty = ty + 1
+
+        print("map shared: ", shared) ## 128*32 = 4096
+
+
+    def set_gfx(self):
+        col = 0
+        row = 0
+        if "gfx" not in self.Resource:
+            return
+
+        gfxdata = self.Resource["gfx"]
+
+        gfxdata_arrays = gfxdata.split("\n")
+        if len(gfxdata_arrays) % 8 == 0:
+            for rowpixel in gfxdata_arrays:
+                if len(rowpixel) > 10:
+                    for digi in rowpixel:
+                        v = int(digi,16)
+                        index = int( math.floor( ((v*16.0)/256.0)*16.0 ) )
+                        alpha = self.pal_transparent[index]
+                        color = self.display_palette[index]
+                        #print(color)
+                        self.gfx_surface.set_at((col,row),color)
+                        col+=1
+                        if col == 128:
+                            col = 0
+                            row += 1
+
+        self.set_shared_map()
+
+    def draw_spr(self,n,x,y,w,h,flip_x,flip_y): ## flip 翻转 ,负数是反方向
+        if self.CanvasHWND == None:
+            return
+
+        sx = 1 ## 1 or -1 
+        sy = 1
+        dx = 0 ## 0 or 1 
+        dy = 0
+
+        if flip_x> 0:
+            sx = -1
+            dx = 1
+        if flip_y >0:
+            sy = -1
+            dy = 1
+
+        idx = math.floor(n % 16)
+        idy = math.floor(n/16)
+
+        start_x = idx*8
+        start_y = idy*8
+
+        w_ = 0
+        h_ = 0 
+
+        if w == 1 and h == 1:
+            w_ = w*8
+            h_ = h*8
+
+        else:
+            w_ = w*8
+            if w_> 128:
+                w_ = 128
+            if w_ < 0:
+                w_ = 0
+
+            h_ = h*8
+
+            if h_ > 128:
+                h_ = 128
+            if h_< 0:
+                h_ = 0 
+
+        start_x = start_x + w_*dx
+        start_y = start_y + h_*dy
+
+        src_rect = pygame.Rect(start_x,start_y, w_,h_)
+        dest_rect = pygame.Rect(x,y,w_*sx,h_*sy)
+
+        self.CanvasHWND.blit(self.gfx_surface,dest_rect,src_rect)
+
+    def draw_map(self,cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask):
+        for y in range(0,cel_h):
+            if cel_y + y < 64 and cel_y + y >= 0:
+                for x in range(0,cel_w):
+                    if cel_x+x < 128 and cel_x + x >= 0:
+                        v = self.map_matrix[cel_y+y][cel_x+x]
+                        if v > 0:
+                            if bitmask == None or bitmask == 0:
+                                self.draw_spr(v,sx+x*8,sy+y*8,1,1,0,0)
+                            else:
+                                if (self.spriteflags[v] & bitmask) != 0:
+                                    self.draw_spr(v,sx+x*8,sy+y*8,1,1,0,0)
+
+
+    def flip(self):
+        if self.HWND != None:
+            self.HWND.blit(self.CanvasHWND,(0,0))
+
+        
+
 class PygameThread(lisp.Lisper):
     Width = 320
     Height = 240
@@ -34,15 +260,56 @@ class PygameThread(lisp.Lisper):
     OffsetX = 0
     OffsetY = 0
 
+    State = "draw" ## draw,res
+    Resource = ""
+
+    ConsoleType = "pico8"
+    Pico8 = None
+
+    def res(self,env,args):
+        res_type = args[0].eval(env)
+        self.Resource = res_type
+        self.State = "res"
+        return "OK"
+
+    def res_done(self,env,args):
+        if self.ConsoleType == "pico8":
+            self.Pico8.set_gfx()
+            self.Pico8.set_gff()
+            self.Pico8.set_map()
+
+        self.State = "draw"
+
+        return "OK"
+
+    def setpico8(self,env,args):
+        version = args[0].eval(env)
+        self.Pico8.version = int(version)
+        self.ConsoleType = "pico8"
+        print(self.ConsoleType, " is ",self.Pico8.version)
+
+        return "OK"
+
     def __init__(self):
         lisp.Lisper.__init__(self) 
+
+        self.Pico8 = Pico8()
+ 
         self.intern('draw.print', lisp.SyntaxObject(self.draw_print))
         self.intern('draw.cls', lisp.SyntaxObject(self.draw_cls))
         self.intern('draw.flip', lisp.SyntaxObject(self.draw_flip))
         self.intern('draw.btn', lisp.SyntaxObject(self.draw_btn))
         self.intern('draw.point', lisp.SyntaxObject(self.draw_point))
         self.intern('draw.scroll', lisp.SyntaxObject(self.draw_scroll))
-    
+
+        self.intern('draw.spr', lisp.SyntaxObject(self.draw_spr))
+        self.intern('draw.map', lisp.SyntaxObject(self.draw_map))
+
+        self.intern('res', lisp.SyntaxObject(self.res))
+        self.intern('res.done', lisp.SyntaxObject(self.res_done))
+
+        self.intern('pico8', lisp.SyntaxObject(self.setpico8))
+
     def draw_reset(self):
         self.OffsetX = 0
         self.OffsetY = 0
@@ -60,11 +327,7 @@ class PygameThread(lisp.Lisper):
         y     = args[2].eval(env)
         color = (255,255,0)
         #print("api_print")
-        imgText = self.font1.render(text,True,color)
-
-        if self.Screen.get_locked() == False:
-            self.Screen.blit(imgText,(int(x)+self.OffsetX,int(y)+self.OffsetY))
-
+        self.print_text(self.font1,x,y,text,color)
         return "OK"
 
     def draw_cls(self,env,args):
@@ -81,6 +344,9 @@ class PygameThread(lisp.Lisper):
         return "OK"
     
     def draw_flip(self,env,args):
+        if self.ConsoleType == "pico8":
+            self.Pico8.flip()
+
         pygame.display.flip()
         return "OK"
     
@@ -116,11 +382,43 @@ class PygameThread(lisp.Lisper):
         self.Screen.set_at(( int(x)+self.OffsetX,int(y)+self.OffsetY), (int(r),int(g),int(b),int(a)))
         
         return "OK"
- 
+
+    def draw_map(self,env,args):
+        if len(args) < 6:
+            return "Error ,draw_spr args "
+        cel_x   = args[0].eval(env)
+        cel_y   = args[1].eval(env)
+        sx      = args[2].eval(env)
+        sy      = args[3].eval(env)
+        cel_w   = args[4].eval(env)
+        cel_h   = args[5].eval(env)
+        bitmask = args[6].eval(env)
+
+        if self.ConsoleType == "pico8":
+            self.Pico8.draw_map(cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
+
+        return "OK"
+
+    def draw_spr(self,env,args):
+        if len(args) < 7:
+            return "Error ,draw_spr args "
+        n      = args[0].eval(env)
+        x      = args[1].eval(env)
+        y      = args[2].eval(env)
+        w      = args[3].eval(env)
+        h      = args[4].eval(env)
+        flip_x = args[5].eval(env)
+        flip_y = args[6].eval(env)
+
+        if self.ConsoleType == "pico8":
+            self.Pico8.draw_spr(n,x,y,w,h,flip_x,flip_y)
+
+        return "OK"
+
     def print_text(self,font,x,y,text,color=(255,255,255)):
         imgText = font.render(text,True,color)
         if self.Screen.get_locked() == False:
-            self.Screen.blit(imgText,(x,y))
+            self.Screen.blit(imgText,(int(x)+self.OffsetX,int(y)+self.OffsetY))
 
     def init_window(self):
         if self.Inited == False:
@@ -139,7 +437,8 @@ class PygameThread(lisp.Lisper):
         self.Screen = pygame.display.set_mode(SCREEN_SIZE, 0, 32)
         pygame.event.set_allowed(None)
         pygame.event.set_allowed([pygame.KEYDOWN,pygame.KEYUP])
-    
+        
+        self.Pico8.HWND = self.Screen
     
     def quit_window(self):
         self.Inited = False
@@ -149,8 +448,28 @@ class PygameThread(lisp.Lisper):
     def read_data_thread(self):
         while self.Inited:
             data = self.child_conn.recv()
-            ret = self.evalstring(data) ## every api must have a return content
-            self.child_conn.send(ret)
+            if self.State == "draw":
+                try:
+                    ret = self.evalstring(data) ## every api must have a return content
+                    self.child_conn.send(ret)
+                except Exception,e:
+                    print("evalstring error")
+                    print(str(e))
+                    return
+            else:
+                print("receiving resource",self.Resource,"...")
+                
+                if data.find("(res.over)") >= 0:
+                    self.State="draw"
+                else:
+                    if self.ConsoleType == "pico8":
+                        if self.Resource in self.Pico8.Resource:
+                            self.Pico8.Resource[self.Resource] += data
+                        else:
+                            self.Pico8.Resource[self.Resource] = data
+
+                self.child_conn.send("OK")
+
 
     def run(self):
         global DT,KeyLog
@@ -193,6 +512,8 @@ def start_tcp_server():
     pygame_process = None
     parent_conn, child_conn = Pipe()
     
+    segment_length = 1024*1024
+
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_address = ('0.0.0.0', PORT_NUMBER)
@@ -207,10 +528,12 @@ def start_tcp_server():
             try:
                 print >>sys.stderr, 'client connected:', client_address
                 while True:
-                    data = connection.recv(512) # the line length
-                    #print >>sys.stderr, 'received "%s"' % data
+                    data = connection.recv(segment_length) # the line length
+                    ##print >>sys.stderr, 'received "%d"' % len(data)
+
                     data = data.strip()
                     if data:
+
                         try:
                             if pygame_is_running == False:
                                 pygame_process = Process(target=start_pygame,args=(child_conn,))
