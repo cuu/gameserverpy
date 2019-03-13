@@ -84,7 +84,7 @@ class Pico8(object):
         sprite = 0
         data = self.Resource["gff"]
         data_array = data.split("\n")
-        if len(data_array) % 8 == 0:
+        if len(data_array) % 2 == 0:
             for rowpixel in data_array:
                 if self.version <= 2:
                     for i in range(0,len(rowpixel)):
@@ -442,6 +442,8 @@ class PygameThread(lisp.Lisper):
         self.Pico8.HWND = self.Screen
     
     def quit_window(self):
+        print("quiting...")
+        self.child_conn.send("QUIT")
         self.Inited = False
         self.Screen = None
         pygame.quit()
@@ -453,23 +455,24 @@ class PygameThread(lisp.Lisper):
 
             if self.State == "draw":
                 #print("the data is ", data)
+                self.child_conn.send("OK")
                 ret = self.evalstring(data) ## every api must have a return content
-                self.child_conn.send(ret)
+                #self.child_conn.send(ret)
 
             else:
+                self.child_conn.send("OK")
                 print("receiving resource",self.Resource,"...")
                 print("the data is :", data)
                 if data.find("(res.over)") >= 0:
                     print(data)
                     self.State="draw"
                 else:
+
                     if self.ConsoleType == "pico8":
                         if self.Resource in self.Pico8.Resource:
                             self.Pico8.Resource[self.Resource] += data
                         else:
                             self.Pico8.Resource[self.Resource] = data
-
-                self.child_conn.send("OK")
 
 
     def run(self):
@@ -488,7 +491,7 @@ class PygameThread(lisp.Lisper):
                         self.print_text(self.font1,40,30,"Let see!")
                         pygame.display.update()
                     if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
-                        print("quit ....")
+                        #print("quit ....")
                         return             
                 if event.type == pygame.KEYUP:
                      KeyLog[event.key] = 0
@@ -498,16 +501,53 @@ class PygameThread(lisp.Lisper):
         finally:
             self.quit_window()
 
-def start_pygame(child):
+def start_pygame(parent,child):
     api = PygameThread()
     api.init_window()
     api.child_conn = child
- 
+    api.parent_conn = parent 
     t = Thread(target=api.read_data_thread)
     t.start()
 
     api.run()
 
+def recv_all2(socket,seg_length):
+    ret = ""
+    data = None
+    seg = seg_length
+
+    data = socket.recv(seg)
+    ret = ""
+
+    if data:
+        length = len(data)
+        if length > 8:
+            length_header = data[0:8]
+            datalen = int(length_header,10)
+
+            if datalen == (length - 8):
+                return data[8:]
+            elif datalen > (length -8):
+                ret = data[8:]
+                data_left = datalen - length - 8
+                while True:
+                    if data_left >= seg:
+                        data2 = socket.recv(seg)
+                        data_left = data_left - len(data)
+                    elif data_left > 0 and data_left < seg:
+                        data2 = socket.recv(data_left)
+
+                    if not data2 or data_left == 0:
+                        if len(ret) == datalen:
+                            return ret
+                        else:
+                            return None
+
+                    ret += data2
+                    if len(ret) >= datalen:
+                        break
+
+    return ret
 
 def recv_all(socket,package_length):
     ret = ""
@@ -545,7 +585,7 @@ def start_tcp_server():
     pygame_process = None
     parent_conn, child_conn = Pipe()
     
-    segment_length = 8
+    segment_length = 4096
 
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -557,31 +597,45 @@ def start_tcp_server():
         while True:
             print >>sys.stderr, 'waiting for a connection'
             connection, client_address = sock.accept()
-            #connection.settimeout(2)
+            connection.settimeout(10)
             try:
                 print >>sys.stderr, 'client connected:', client_address
                 while True:
 
-                    data = connection.recv(segment_length) # the line length
-                    data_len = int(data,10)
-                    connection.send("OK\n")
+                    #data = connection.recv(segment_length) # the line length
+                    #data_len = int(data,10)
+                    #connection.send("OK\n")
                     #print("data is ",data)
-                    data = recv_all(connection,data_len)
+                    #data = recv_all(connection,data_len)
+                    data = recv_all2(connection,segment_length)
 
                     if data:
                         data.strip()
                         try:
                             if pygame_is_running == False:
-                                pygame_process = Process(target=start_pygame,args=(child_conn,))
+                                pygame_process = Process(target=start_pygame,args=(parent_conn,child_conn))
                                 pygame_process.start()
                                 pygame_is_running = True
                             
                             if pygame_is_running == True:
-                                parent_conn.send(data)
-                                if parent_conn.poll(1):
-                                    ret = parent_conn.recv()                
-                                    connection.sendall(ret+"\n")
-                                else:
+                                #print("sending...")
+                                try:
+                                    parent_conn.send(data)
+                                    ret = parent_conn.recv()
+                                    if ret=="QUIT":
+                                        pygame_is_running = False
+                                        connection.sendall("OK\n")
+                                        connection.close()
+                                        parent_conn.close()
+                                        child_conn.close()
+                                        parent_conn, child_conn = Pipe()
+
+                                        break
+
+                                    else:
+                                        connection.sendall(ret+"\n")
+                                except Exception,e:
+                                    print(str(e))
                                     parent_conn.close()
                                     child_conn.close()
                                     
@@ -594,6 +648,7 @@ def start_tcp_server():
                         except Exception,e:
                             print(str(e))
                             connection.sendall("Error:"+str(e))
+                            break
                     else:
                         break
 

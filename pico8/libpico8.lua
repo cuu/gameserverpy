@@ -77,6 +77,29 @@ function safe_format(formatstring,...)
 end
 
 function safe_tcp_send(data)
+  local ret,msg
+  local ret2
+  -- print("safe_tcp_send data is " ,data ,#data)
+  if #data == 0 then 
+    print("data is zero",data)
+    return
+  end
+
+  local datalength = string.format("%08d",#data)
+  data = datalength..data
+
+  ret,msg = tcp:send(data)
+  if(ret ~= nil) then
+      ret2 = tcp:receive("*l")
+      return ret2
+    else
+      print("exiting...",msg)
+      os.exit()
+  end
+  
+end
+
+function safe_tcp_send_old(data)
 	local ret,msg
 	local ret2
 	-- print("safe_tcp_send data is " ,data ,#data)
