@@ -4,6 +4,7 @@ import socket
 import sys
 import pygame
 import math
+import time
 
 from beeprint import pp
 
@@ -266,6 +267,8 @@ class PygameThread(lisp.Lisper):
     ConsoleType = "pico8"
     Pico8 = None
 
+    frames = 0
+
     def res(self,env,args):
         res_type = args[0].eval(env)
         self.Resource = res_type
@@ -345,10 +348,22 @@ class PygameThread(lisp.Lisper):
         return "OK"
     
     def draw_flip(self,env,args):
+        if self.frames == 0:
+            self.prev_time = time.time()
+
         if self.ConsoleType == "pico8":
             self.Pico8.flip()
 
         pygame.display.flip()
+
+        self.frames+=1
+        self.curr_time = time.time()
+        if self.curr_time - self.prev_time >=10.0:
+            fps = self.frames/10
+            print("fps is: ",fps)
+            self.frames = 0
+            self.prev_time = self.curr_time
+
         return "OK"
     
     def draw_btn(self,env,args):
@@ -455,14 +470,11 @@ class PygameThread(lisp.Lisper):
 
             if self.State == "draw":
                 #print("the data is ", data)
-                self.child_conn.send("OK")
                 ret = self.evalstring(data) ## every api must have a return content
-                #self.child_conn.send(ret)
-
+                self.child_conn.send(ret)
             else:
                 self.child_conn.send("OK")
                 print("receiving resource",self.Resource,"...")
-                print("the data is :", data)
                 if data.find("(res.over)") >= 0:
                     print(data)
                     self.State="draw"
