@@ -134,7 +134,7 @@ function api.btnp(i,p)
 end
 
 function api.mget(x,y)
-	ret = server.mget(x,y)
+	local ret = server.mget(x,y)
 	return tonumber(ret)
 end
 
@@ -187,7 +187,10 @@ assert(api.atan2(1, 0) == 0)
 assert(api.atan2(0,-1) == 0.25)
 assert(api.atan2(-1,0) == 0.5) 
 assert(api.atan2(0, 1) == 0.75)
+
 api.sqrt = math.sqrt
+api.abs = math.abs
+
 function api.sgn(x)
   if x < 0 then 
     return -1
@@ -199,6 +202,7 @@ end
 api.sub = string.sub
 
 function api.rnd(x)
+	x = math.floor(x)
 	return math.random(0, x)
 end
 function api.srand(seed)
@@ -421,7 +425,23 @@ function api.spr(n,x,y,w,h,flip_x,flip_y)
   y = y or 0
   flip_x = flip_x or 0
   flip_y = flip_y or 0
-  
+ 
+  if flip_x == true then
+    flip_x = 1
+  end
+
+  if flip_x == false then
+    flip_x = 0
+  end
+
+  if flip_y == true then
+    flip_y = 1
+  end
+
+  if flip_y == false then
+    flip_y = 0
+  end
+
   server.spr(n,x,y,w,h,flip_x,flip_y)
 
 end
@@ -437,6 +457,24 @@ function api.sspr(sx,sy,sw,sh,dx,dy,dw,dh,flip_x,flip_y)
   dy = dy or 0
   flip_x = flip_x or 0
   flip_y = flip_y or 0
+
+  if flip_x == true then
+    flip_x = 1
+  end
+
+  if flip_x == false then
+    flip_x = 0
+  end
+
+  if flip_y == true then
+    flip_y = 1
+  end
+
+  if flip_y == false then
+    flip_y = 0
+  end
+
+
   server.sspr(sx,sy,sw,sh,dx,dy,dw,dh,flip_x,flip_y)
 end
 
@@ -530,6 +568,14 @@ function api.circ(x0,y0,x1,y1,col)
   if col == nil then
     server.circ(x0,y0,x1,y1)
   else
+    server.circ(x0,y0,x1,y1,col)
+  end
+end
+
+function api.circfill(x0,y0,x1,y1,col)
+  if col == nil then
+    server.circfill(x0,y0,x1,y1)
+  else
     server.circfill(x0,y0,x1,y1,col)
   end
 end
@@ -558,5 +604,18 @@ function api.palt(c,t)
    server.palt(c,t)
   end
 end  
+
+function api.fget(n,f)
+  if n == nil then return nil end
+  server.fget(n,f)
+end 
+
+function api.music(n,fade_len,channel_mask)
+
+end
+
+function api.sfx(n,channel,offset)
+
+end
 
 return api

@@ -42,6 +42,10 @@ function new_sandbox()
     clip=api.clip,
     pget=api.pget,
     pset=api.pset,
+
+    fget=api.fget,    
+    fset=api.fset,
+
     flip=api.flip,
     print=api.print,
     printh=log,

@@ -117,8 +117,13 @@ class Pico8(object):
                 else:                    
                     for i in range(0,len(rowpixel),2):
                         v = int(rowpixel[i]+rowpixel[i+1],16)
+
+                        if sprite > 255:
+                            break
+
                         self.spriteflags[sprite] = v 
                         sprite+=1
+                         
 
         print("spriteflags:", sprite)
 
@@ -378,7 +383,7 @@ class Pico8(object):
             y0=y0-h
 
         rect_ = pygame.Rect(x0,y0,w,h)
-        pygame.draw.rect(self.CanvasHWND,self.display_palette[col], rect_)
+        pygame.draw.rect(self.CanvasHWND,self.display_palette[self.pen_color], rect_)
     
     def circ(self,ox,oy,r,col=None):
         self.color(col)
@@ -387,8 +392,8 @@ class Pico8(object):
 
     def circfill(self,cx,cy,r,col=None):
         self.color(col)
-        r = math.floor(r)
-        pygame.draw.circle(self.CanvasHWND,self.display_palette[self.pen_color],(ox,oy),r,0)
+
+        pygame.draw.circle(self.CanvasHWND,self.display_palette[self.pen_color],(cx,cy),r,0)
 
     
     def line(self,x0,y0,x1,y1,col=None):
@@ -441,6 +446,19 @@ class Pico8(object):
             self.draw_palette[c0] = c1
             self._palette_modified = True
     
+    def fget(self,n,f=None):
+        if f != None:
+            if n > 255:
+                return "0"
+            
+            ret = self.spriteflags[n] & (1 << f)
+            return str(ret)
+        else:
+            if n < 255:
+                return str(self.spriteflags[n])
+            else:
+                return "0"
+
 class PygameThread(lisp.Lisper):
     Width = 320
     Height = 240
@@ -462,11 +480,24 @@ class PygameThread(lisp.Lisper):
 
     frames = 0
     
-    def get_arg(index,env,args):
+    def get_arg(self,index,env,args,force_format=None):
         if index >= len(args)-1:
-            return None
+            if force_format != None:
+                if force_format== "int":
+                    return 0
+                elif force_format == "str":
+                    return ""
+            else:
+                return None
         
-        return args[index].eval(env)
+        a = args[index].eval(env)
+        if force_format != None:
+            if force_format== "int":
+                return int(a)
+            elif force_format == "str":
+                return str(a)
+        else:
+            return a
         
     def res(self,env,args):
         res_type = args[0].eval(env)
@@ -502,7 +533,6 @@ class PygameThread(lisp.Lisper):
         self.intern('btn', lisp.SyntaxObject(self.btn))
         self.intern('btnp', lisp.SyntaxObject(self.btnp))
 
-        self.intern('point', lisp.SyntaxObject(self.draw_point))
         self.intern('scroll', lisp.SyntaxObject(self.scroll))
 
         self.intern('spr', lisp.SyntaxObject(self.spr))
@@ -520,6 +550,11 @@ class PygameThread(lisp.Lisper):
         self.intern('circfill', lisp.SyntaxObject(self.circfill))
 
         self.intern('time', lisp.SyntaxObject(self.time))
+
+        self.intern('pal', lisp.SyntaxObject(self.pal))
+
+        self.intern('fget', lisp.SyntaxObject(self.fget))
+
 
         self.intern('res', lisp.SyntaxObject(self.res))
         self.intern('res.done', lisp.SyntaxObject(self.res_done))
@@ -660,16 +695,14 @@ class PygameThread(lisp.Lisper):
         return "OK"
 
     def rectfill(self,env,args):
-        x0 = args[0].eval(env)
-        y0 = args[1].eval(env)
-        x1 = args[2].eval(env)
-        y1 = args[3].eval(env)
+        x0 =  self.get_arg(0,env,args)
+        y0 =  self.get_arg(1,env,args)
+        x1 =  self.get_arg(2,env,args)
+        y1 =  self.get_arg(3,env,args)
+        col = self.get_arg(4,env,args)
 
-        if len(args) > 4:
-            col = args[4].eval(env)
-            self.Pico8.rectfill(x0,y0,x1,y1,col)
-        else:
-            self.Pico8.rectfill(x0,y0,x1,y1)
+        self.Pico8.rectfill(x0,y0,x1,y1,col)
+        
         
         return "OK"
 
@@ -686,14 +719,12 @@ class PygameThread(lisp.Lisper):
         return "OK"
 
     def circfill(self,env,args):
-        ox = args[0].eval(env)
-        oy = args[1].eval(env)
-        r  = args[2].eval(env)
-        if len(args) > 3:
-            col = args[3].eval(env)
-            self.Pico8.circfill(ox,oy,r,col)
-        else:
-            self.Pico8.circfill(ox,oy,r)
+        cx = self.get_arg(0,env,args)
+        cy = self.get_arg(1,env,args)
+        r  = self.get_arg(2,env,args)
+        col= self.get_arg(3,env,args)
+
+        self.Pico8.circfill(cx,cy,r,col)
 
         return "OK"
 
@@ -747,6 +778,27 @@ class PygameThread(lisp.Lisper):
         self.Pico8.color(c)
         
         return "OK"
+
+    def pal(self,env,args):
+        c0 = self.get_arg(0,env,args)
+        c1 = self.get_arg(1,env,args)
+        p  = self.get_arg(2,env,args)
+        self.Pico8.pal(c0,c1,p)
+
+        return "OK"
+
+    def palt(self,env,args):
+        c = self.get_arg(0,env,args)
+        t = self.get_arg(1,env,args)
+
+        self.Pico8.palt(c,t)
+        
+        return "OK"
+   
+    def fget(self,env,args):
+        n = self.get_arg(0,env,args,"int")
+        f = self.get_arg(1,env,args,"int")
+        return self.Pico8.fget(n,f)
         
     def print_text(self,font,x,y,text,color=(255,255,255)):
         imgText = font.render(text,True,color)
@@ -787,7 +839,7 @@ class PygameThread(lisp.Lisper):
             data = self.child_conn.recv()
 
             if self.State == "draw":
-                #print("the data is ", data)
+#                print("the data is ", data)
 
                 ret = self.evalstring(data) ## every api must have a return content
                 self.child_conn.send(ret)
