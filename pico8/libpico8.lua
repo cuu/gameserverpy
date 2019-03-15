@@ -1,8 +1,5 @@
 log = print
 local api = { loaded_code = nil }
-
-local draw = {}
-
 local bit = require('bit')
 
 api.band = bit.band
@@ -11,7 +8,6 @@ api.bxor = bit.bxor
 api.bnot = bit.bnot
 api.shl = bit.lshift
 api.shr = bit.rshift
-
 
 local __keymap = {
   [0] = {
@@ -30,24 +26,6 @@ local pico8 = {
   clip = nil, 
   fps = 30,
   screen = nil, 
-  palette = {
-    {0,0,0,255},
-    {29,43,83,255},
-    {126,37,83,255},
-    {0,135,81,255},
-    {171,82,54,255},
-    {95,87,79,255},
-    {194,195,199,255},
-    {255,241,232,255},
-    {255,0,77,255},
-    {255,163,0,255},
-    {255,240,36,255},
-    {0,231,86,255},
-    {41,173,255,255},
-    {131,118,156,255},
-    {255,119,168,255},
-    {255,204,170,255}
-  },
   color = nil, 
   spriteflags = {},
   map = {},
@@ -58,173 +36,25 @@ local pico8 = {
   cursor = {0, 0},
   camera_x = 0, 
   camera_y = 0, 
-  draw_palette = {},
-  display_palette = {},
-  pal_transparent = {},
 }
 
+local server = require("server")
+
 api.pico8 = pico8 
-
-local host, port = "127.0.0.1", 8080
-local socket = require("socket")
-local tcp = assert(socket.tcp())
-
-tcp:connect(host, port);
-tcp:settimeout(5)
-
-function safe_format(formatstring,...)	
-	return string.format(formatstring.."\n",...)
-end
-
-function safe_tcp_send(data)
-  local ret,msg
-  local ret2
-  -- print("safe_tcp_send data is " ,data ,#data)
-  if #data == 0 then 
-    print("data is zero",data)
-    return
-  end
-
-  local datalength = string.format("%08d",#data)
-  data = datalength..data
-
-  ret,msg = tcp:send(data)
-  if(ret ~= nil) then
-      ret2 = tcp:receive("*l")
-      return ret2
-    else
-      print("exiting...",msg)
-      os.exit()
-  end
-  
-end
-
-function safe_tcp_send_old(data)
-	local ret,msg
-	local ret2
-	-- print("safe_tcp_send data is " ,data ,#data)
-  if #data == 0 then 
-    print("data is zero",data)
-    return
-  end
-
-  local datalength = string.format("%08d",#data)
-
-  ret,msg = tcp:send(datalength)
-  if ret ~= nil then
-      ret,msg = tcp:receive("*l")
-      if ret == nil then
-        print("data length header error",ret,msg)
-        os.exit()
-      end
-  end
-
-	ret,msg = tcp:send(data)
-
-	if(ret ~= nil) then
-	  	ret2 = tcp:receive("*l")
-	    return ret2
-	  else
-	   	print("exiting...",msg)
-	    os.exit()
-	end
-  
-end
-
-function draw.scroll(dy)
-	dy = dy or 0
-	local thing = safe_format("(draw.scroll %d)",dy)
-	return safe_tcp_send(thing)
-end
-
-function draw.print(str,x,y,col)
-	local thing = safe_format("(draw.print \"%s\" %d %d %d)",str,x,y,col)
-	return safe_tcp_send(thing)
-
-end
-
-function draw.cls(frame)
-	local thing = safe_format("(draw.cls %d)",frame)
-	return safe_tcp_send(thing)
-
-end
-
-function draw.flip()
-	local thing = safe_format("(draw.flip)")
-	return safe_tcp_send(thing)
-end
-
-function draw.point(x,y,r,g,b,a)
-	local thing = safe_format("(draw.point  %d %d %d %d %d %d)",x,y,r,g,b,a)
-	return safe_tcp_send(thing)
-end
-
-function draw.btn(codestr,playernumber)
-	local thing = safe_format("(draw.btn \"%s\" %d)", codestr,playernumber)
-	return safe_tcp_send(thing)
-end
-
-function draw.spr(n,x,y,w,h,flip_x,flip_y)
-  local thing = safe_format("(draw.spr %d %d %d %d %d %d %d)", n,x,y,w,h,flip_x,flip_y)
-  return safe_tcp_send(thing)
-
-end
-
-function draw.map(cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
-  local thing = safe_format("(draw.map %d %d %d %d %d %d %d)",cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
-  return safe_tcp_send(thing)
-end
-
-function send_pico8_version(version)
-  local thing = safe_format("(pico8 %d)", version)
-  safe_tcp_send(thing)
-end
-
-function send_resource_done()
-  local thing = "(res.done)"
-
-  safe_tcp_send(thing)
-
-end
-
-function send_resource(res_type,res_data)
-  if res_data == nil or #res_data == 0  then 
-    return 
-  end
-
-  local thing = safe_format("(res \"%s\")", res_type)
-
-  safe_tcp_send(thing)
-
-  thing = res_data
-  local ret = safe_tcp_send(thing)
-  if ret == nil then
-    print("the ret of res_data is ", ret,res_type,#res_data)
-  end
-
-  thing = "(res.over)\n"
-  ret = safe_tcp_send(thing)
-  --print("the ret of res.over is ", ret)
-
-end
-
-
-function api.sleep(sec)
-    socket.select(nil, nil, sec)
-end
 
 function api.color(c)
   c = c and math.floor(c) or 0 
   assert(c >= 0 and c <= 16,string.format('c is %s',c))
-  pico8.color = c
+  server.color(c)
 
 --  love.graphics.setColor(c*16,0,0,255)
 end
 
 function api.pset(x,y,c)
   if not c then return end 
-  api.color(c)
-  draw.point(math.floor(x),math.floor(y),c*16,0,0,255)
+
+  server.pset(x,y,c)
+
 end
 
 
@@ -246,21 +76,21 @@ function api.print(str,x,y,col)
     api.color(c)
     api.cursor(0, y+6)
   end 
-	draw.print(str,x,y,col)		
+  server.print(str,x,y,col)		
 end
 
 function api.cursor(x,y)
-  pico8.cursor = {x,y}
+  server.cursor(x,y)
 end
 
 
 function api.cls(frame)
 	frame = frame or 0
-	draw.cls(frame)
+	server.cls(frame)
 end
 
 function api.flip()
-	draw.flip()
+	server.flip()
 end
 
 function api.btn(i,p)
@@ -270,7 +100,7 @@ function api.btn(i,p)
 	if type(i) == 'number' then
 		p = p or 0
 		if __keymap[p] and __keymap[p][i] then
-				ret = draw.btn( __keymap[p][i],p)
+				ret = server.btn( __keymap[p][i],p)
 				if ret == "TRUE" then
 					return true
 				else 
@@ -281,6 +111,35 @@ function api.btn(i,p)
 	
 	return false
 	
+end
+
+function api.btnp(i,p)
+	local thing
+	local ret
+
+	if type(i) == 'number' then
+		p = p or 0
+		if __keymap[p] and __keymap[p][i] then
+				ret = server.btnp( __keymap[p][i],p)
+				if ret == "TRUE" then
+					return true
+				else 
+					return false
+				end
+		end
+	end
+	
+	return false
+	
+end
+
+function api.mget(x,y)
+	ret = server.mget(x,y)
+	return tonumber(ret)
+end
+
+function api.mset(x,y,v)
+	server.mset(x,y,v)
 end
 
 
@@ -319,8 +178,6 @@ assert(api.mid(2, 3, 1) == 2)
 assert(api.mid(3, 1, 2) == 2)
 assert(api.mid(3, 2, 1) == 2)
 
-
-
 api.flr = math.floor
 function api.cos(x) return math.cos((x or 0)*(math.pi*2)) end
 function api.sin(x) return math.sin(-(x or 0)*(math.pi*2)) end
@@ -341,14 +198,27 @@ end
 
 api.sub = string.sub
 
+function api.rnd(x)
+	return math.random(0, x)
+end
+function api.srand(seed)
+	seed = seed or 0
+
+	if seed == 0 then
+		seed = 1
+	end
+
+	return math.randomseed(seed)
+end
+
 function api.shutdown()
+	server.down()
 	os.exit()
 end
 
 function api.stat(x)
   return 0
 end
-
 
 local function read_file(path)
     local file = io.open(path, "rb") -- r read mode and b binary mode
@@ -530,15 +400,15 @@ function api.load_p8_text(filename)
 
   api.loaded_code = lua
 
-  send_pico8_version(version)
+  server.send_pico8_version(version)
 
-  send_resource("gfx",gfxdata)
-  send_resource("gff",gffdata)
-  send_resource("sfx",sfxdata)
-  send_resource("map",mapdata)
-  send_resource("music",musicdata)
+  server.send_resource("gfx",gfxdata)
+  server.send_resource("gff",gffdata)
+  server.send_resource("sfx",sfxdata)
+  server.send_resource("map",mapdata)
+  server.send_resource("music",musicdata)
 
-  send_resource_done()
+  server.send_resource_done()
 
 end
 
@@ -552,9 +422,24 @@ function api.spr(n,x,y,w,h,flip_x,flip_y)
   flip_x = flip_x or 0
   flip_y = flip_y or 0
   
-  draw.spr(n,x,y,w,h,flip_x,flip_y)
+  server.spr(n,x,y,w,h,flip_x,flip_y)
 
 end
+
+function api.sspr(sx,sy,sw,sh,dx,dy,dw,dh,flip_x,flip_y)
+  sx = sx or 0
+  sy = sy or 0
+  sw = sw or 0
+  sh = sh or 0
+  dw = dw or sw
+  dh = dh or sh
+  dx = dx or 0
+  dy = dy or 0
+  flip_x = flip_x or 0
+  flip_y = flip_y or 0
+  server.sspr(sx,sy,sw,sh,dx,dy,dw,dh,flip_x,flip_y)
+end
+
 
 function api.map(cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
   cel_x = cel_x or 0
@@ -569,8 +454,109 @@ function api.map(cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
 
   bitmask = bitmask or 0
 
-  draw.map(cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
+  server.map(cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
 
 end
+
+function api.add(a,v)
+  if a == nil then 
+    warning('add to nil')
+    return
+  end  
+  table.insert(a,v)
+end
+
+function api.del(a,dv)
+  if a == nil then 
+    warning('del from nil')
+    return
+  end  
+  for i,v in ipairs(a) do
+    if v==dv then 
+      table.remove(a,i)
+    end  
+  end  
+end
+
+function warning(msg)
+  log(debug.traceback('WARNING: '..msg,3))
+end
+
+function api.foreach(a,f)
+  if not a then 
+    warning('foreach got a nil value')
+    return
+  end  
+  for i,v in ipairs(a) do
+    f(v) 
+  end  
+end
+
+function api.count(a)
+  return #a
+end
+
+function api.all(a)
+  local i = 0
+  local n = table.getn(a)
+  return function()
+    i = i + 1
+    if i <= n then return a[i] end
+  end
+end
+
+
+function api.camera()
+end
+
+function api.rect(x0,y0,x1,y1,col)
+  if col == nil then
+  	server.rect(x0,y0,x1,y1)
+  else
+  	server.rect(x0,y0,x1,y1,col)
+  end
+
+end
+
+function api.rectfill(x0,y0,x1,y1,col)
+  if col == nil then
+    server.rectfill(x0,y0,x1,y1)
+  else
+    server.rectfill(x0,y0,x1,y1,col)
+  end
+end
+
+function api.circ(x0,y0,x1,y1,col)
+  if col == nil then
+    server.circ(x0,y0,x1,y1)
+  else
+    server.circfill(x0,y0,x1,y1,col)
+  end
+end
+
+function api.line(x0,y0,x1,y1,col)
+  if col == nil then
+    server.line(x0,y0,x1,y1)
+  else
+    server.line(x0,y0,x1,y1,col)
+  end
+end
+function api.time()
+  ret = server.time()
+  return tonumber(ret)
+end
+
+function api.pal(c0,c1,p)
+    server.pal(c0,c1,p)
+end
+
+function api.palt(c,t)
+  if type(c) ~= 'number' then
+   server.palt()
+  else
+   t = t or false
+   server.palt(c,t)
+  end
+end  
 
 return api

@@ -2,7 +2,6 @@ require 'strict'
 --local api = require 'libpico8_unix_socket'
 local api = require 'libpico8'
 
-
 log = print
 
 local function setfenv(fn, env)
@@ -38,15 +37,68 @@ local function getfenv(fn)
 end
 
 function new_sandbox()
-	return {
-		print=api.print,
-		cls  = api.cls,
-		sleep = api.sleep,
-		flip  = api.flip,
-		btn   = api.btn,
-    spr   = api.spr,
-    map   = api.map
-	}
+  return {
+
+    clip=api.clip,
+    pget=api.pget,
+    pset=api.pset,
+    flip=api.flip,
+    print=api.print,
+    printh=log,
+    cursor=api.cursor,
+    color=api.color,
+    cls=api.cls,
+    camera=api.camera,
+    circ=api.circ,
+    circfill=api.circfill,
+    line=api.line,
+    rect=api.rect,
+    rectfill=api.rectfill,
+    
+    pal=api.pal,
+    palt=api.palt,
+    spr=api.spr,
+    sspr=api.sspr,
+    add=api.add,
+    del=api.del,
+    foreach=api.foreach,
+    count=api.count,
+    all=api.all,
+    btn=api.btn,
+    btnp=api.btnp,
+    sfx=api.sfx,
+    music=api.music,
+    
+    mget=api.mget,
+    mset=api.mset,
+    map=api.map,
+
+    max=api.max,
+    min=api.min,
+    mid=api.mid,
+    flr=api.flr,
+    cos=api.cos,
+    sin=api.sin,
+    atan2=api.atan2,
+    sqrt=api.sqrt,
+    abs=api.abs,
+    rnd=api.rnd,
+    srand=api.srand,
+    sgn=api.sgn,
+    band=api.band,
+    bor=api.bor,
+    bxor=api.bxor,
+    bnot=api.bnot,
+    shl=api.shl,
+    shr=api.shr,
+    exit=api.shutdown,
+    shutdown=api.shutdown,
+    sub=api.sub,
+    stat=api.stat,
+    time = api.time, 
+    mapdraw = api.map
+
+   }
 end
 
 
