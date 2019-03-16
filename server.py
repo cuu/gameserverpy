@@ -59,29 +59,29 @@ class Pico8(object):
     
     Resource = {}   
     palette = [
-        (0,0,0,255),
-        (29,43,83,255),
-        (126,37,83,255),
-        (0,135,81,255),
-        (171,82,54,255),
-        (95,87,79,255),
-        (194,195,199,255),
-        (255,241,232,255),
-        (255,0,77,255),
-        (255,163,0,255),
-        (255,240,36,255),
-        (0,231,86,255),
-        (41,173,255,255),
-        (131,118,156,255),
-        (255,119,168,255),
-        (255,204,170,255)]
+        pygame.Color(0,0,0,255),
+        pygame.Color(29,43,83,255),
+        pygame.Color(126,37,83,255),
+        pygame.Color(0,135,81,255),
+        pygame.Color(171,82,54,255),
+        pygame.Color(95,87,79,255),
+        pygame.Color(194,195,199,255),
+        pygame.Color(255,241,232,255),
+        pygame.Color(255,0,77,255),
+        pygame.Color(255,163,0,255),
+        pygame.Color(255,240,36,255),
+        pygame.Color(0,231,86,255),
+        pygame.Color(41,173,255,255),
+        pygame.Color(131,118,156,255),
+        pygame.Color(255,119,168,255),
+        pygame.Color(255,204,170,255)]
 
     draw_palette = []
     display_palette = []
     pal_transparent = []
 
     cliprect= None
-    pen_color = 0
+    pen_color = 1
     _cursor = (0,0)
     memory = {}
     _palette_modified = False
@@ -91,11 +91,8 @@ class Pico8(object):
     def __init__(self):
         self.uptime = time.time()
 
-        self.CanvasHWND = pygame.Surface((self.Width,self.Height))
-        self.gfx_surface = pygame.Surface((self.Width,self.Height))
-        self.map_surface = pygame.Surface((self.Width,self.Height))
-
-        self.gfx_matrix = [0 for x in range( self.Width*self.Height)]
+        self.CanvasHWND = pygame.Surface((self.Width,self.Height),pygame.SRCALPHA, 32).convert_alpha()
+        self.gfx_surface = pygame.Surface((self.Width,self.Height),pygame.SRCALPHA, 32).convert_alpha()
 
         self.map_matrix  = [0 for x in range(64*128)]
 
@@ -210,8 +207,8 @@ class Pico8(object):
                     alpha = self.pal_transparent[index]
                     color = self.display_palette[index]
 #                    print(color)
-                    self.gfx_matrix[col+row*self.Width] = index
-
+                    color.a = alpha*255
+ 
                     self.gfx_surface.set_at((col,row),color)
                     col+=1
                     if col == 128:
@@ -220,7 +217,8 @@ class Pico8(object):
 
         self.set_shared_map()
     
-    def spr(self,n,x,y,w,h,flip_x,flip_y): 
+    def spr(self,n,x,y,w,h,flip_x,flip_y):
+         
         idx = math.floor(n % 16)
         idy = math.floor(n/16)
 
@@ -243,7 +241,8 @@ class Pico8(object):
         if _sw == 0 or _sh == 0:
             return
 
-        gfx_piece = pygame.Surface((_sw,_sh))
+        gfx_piece = pygame.Surface((_sw,_sh),pygame.SRCALPHA, 32).convert_alpha()
+
         gfx_piece.blit(self.gfx_surface,(0,0,_sw,_sh),(start_x,start_y,_sw,_sh))
         
         xflip = False
@@ -267,7 +266,7 @@ class Pico8(object):
         if sw <= 0 or sh <= 0:
             return
 
-        gfx_piece = pygame.Surface((sw,sh))
+        gfx_piece = pygame.Surface((sw,sh),pygame.SRCALPHA, 32).convert_alpha()
 
         gfx_piece.blit(self.gfx_surface,(0,0,sw,sh),(sx,sy,sw,sh))
  
@@ -296,7 +295,8 @@ class Pico8(object):
 
         src_rect = pygame.Rect(start_x,start_y, w_,h_)
         dest_rect = pygame.Rect(x,y,w_,h_)
-
+        
+         
         self.CanvasHWND.blit(self.gfx_surface,dest_rect,src_rect)
 
     def map(self,cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask):
@@ -621,7 +621,7 @@ class PygameThread(lisp.Lisper):
         if self.ConsoleType == "pico8":
             self.Pico8.flip()
         
-        pygame.display.update()
+        pygame.display.flip()
 
         self.frames+=1
 
@@ -864,7 +864,9 @@ class PygameThread(lisp.Lisper):
         
         self.Pico8 = Pico8()
         self.Pico8.HWND = self.Screen
-    
+        #self.Pico8.cls(1)
+        #self.Pico8.flip()
+
     def quit_window(self):
         print("quiting...")
         self.child_conn.send("QUIT")
