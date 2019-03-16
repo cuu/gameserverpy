@@ -200,11 +200,12 @@ function api.sgn(x)
 end
 
 api.sub = string.sub
+api.tostr = tostring
 
 function api.rnd(x)
-	x = math.floor(x)
-	return math.random(0, x)
+	return 0 + math.random() * (x - 0)
 end
+
 function api.srand(seed)
 	seed = seed or 0
 
@@ -418,7 +419,6 @@ end
 
 function api.spr(n,x,y,w,h,flip_x,flip_y)
   n = api.flr(n)
-  n = api.flr(n)
   w = w or 1
   h = h or 1
   x = x or 0
@@ -442,7 +442,7 @@ function api.spr(n,x,y,w,h,flip_x,flip_y)
     flip_y = 0
   end
 
-  server.spr(n,x,y,w,h,flip_x,flip_y)
+  server.spr(n, api.flr(x), api.flr(y), api.flr(w),api.flr(h),flip_x,flip_y)
 
 end
 
@@ -587,9 +587,18 @@ function api.line(x0,y0,x1,y1,col)
     server.line(x0,y0,x1,y1,col)
   end
 end
+
 function api.time()
   ret = server.time()
   return tonumber(ret)
+end
+
+function api.reboot()
+	server.reboot()
+end
+
+function api.printh(text,filename,overwrite)
+	server.printh(text)
 end
 
 function api.pal(c0,c1,p)

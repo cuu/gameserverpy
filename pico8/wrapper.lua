@@ -100,6 +100,9 @@ function new_sandbox()
     sub=api.sub,
     stat=api.stat,
     time = api.time, 
+		reboot = api.reboot,
+		printh = api.printh,
+		tostr  = api.tostr,
     mapdraw = api.map
 
    }

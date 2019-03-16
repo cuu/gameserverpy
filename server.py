@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*- 
 import os
 import socket
+import linecache
 import sys
 import pygame
 import math
@@ -27,6 +28,16 @@ GameShellKeys["u"]     = pygame.K_u  ## GamePad X
 GameShellKeys["i"]     = pygame.K_i  ## GamePad Y
 GameShellKeys["return"] = pygame.K_RETURN ##GamePad start
 GameShellKeys["escape"] = pygame.K_ESCAPE ##GamePad menu
+
+
+def PrintException():
+    exc_type, exc_obj, tb = sys.exc_info()
+    f = tb.tb_frame
+    lineno = tb.tb_lineno
+    filename = f.f_code.co_filename
+    linecache.checkcache(filename)
+    line = linecache.getline(filename, lineno, f.f_globals)
+    print 'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj)
 
 
 class Pico8(object):
@@ -74,8 +85,12 @@ class Pico8(object):
     _cursor = (0,0)
     memory = {}
     _palette_modified = False
+    
+    uptime = None ## when pico8 is up
 
     def __init__(self):
+        self.uptime = time.time()
+
         self.CanvasHWND = pygame.Surface((self.Width,self.Height))
         self.gfx_surface = pygame.Surface((self.Width,self.Height))
         self.map_surface = pygame.Surface((self.Width,self.Height))
@@ -94,11 +109,12 @@ class Pico8(object):
 
             self.display_palette.append(self.palette[i])
         
-        self.Font = pygame.font.Font("PICO-8.ttf",8)
+        self.Font = pygame.font.Font("PICO-8.ttf",4)
         
         for i in range(4):
             self.memory[0x5f20+i] = 0
         
+ 
 
     def set_gff(self): # red=1, orange=2, yellow=4, green=8, blue=16, purple=32, pink=64, peach=128
         if "gff" not in self.Resource:
@@ -184,31 +200,27 @@ class Pico8(object):
             return
 
         gfxdata = self.Resource["gfx"]
-
+        gfxdata.strip()
         gfxdata_arrays = gfxdata.split("\n")
-        if len(gfxdata_arrays) % 8 == 0:
-            for rowpixel in gfxdata_arrays:
-                if len(rowpixel) > 10:
-                    for digi in rowpixel:
-                        v = int(digi,16)
-                        index = int( math.floor( ((v*16.0)/256.0)*16.0 ) )
-                        alpha = self.pal_transparent[index]
-                        color = self.display_palette[index]
-                        #print(color)
-                        self.gfx_matrix[col+row*self.Width] = index
+        for rowpixel in gfxdata_arrays:
+            if len(rowpixel) > 10:
+                for digi in rowpixel:
+                    v = int(digi,16)
+                    index = int( math.floor( ((v*16.0)/256.0)*16.0 ) )
+                    alpha = self.pal_transparent[index]
+                    color = self.display_palette[index]
+#                    print(color)
+                    self.gfx_matrix[col+row*self.Width] = index
 
-                        self.gfx_surface.set_at((col,row),color)
-                        col+=1
-                        if col == 128:
-                            col = 0
-                            row += 1
+                    self.gfx_surface.set_at((col,row),color)
+                    col+=1
+                    if col == 128:
+                        col = 0
+                        row += 1
 
         self.set_shared_map()
     
     def spr(self,n,x,y,w,h,flip_x,flip_y): 
-        if self.CanvasHWND == None:
-            return
-
         idx = math.floor(n % 16)
         idy = math.floor(n/16)
 
@@ -302,17 +314,15 @@ class Pico8(object):
     
     
     def mget(self,x,y):
-        if x > 63 or x < 0 or y > 127 or y < 0:
+        if  y > 63 or x < 0 or x > 127 or y < 0:
             return "FALSE"
         
-        return str( self.map_matrix[ x + y *64 ] )
+        return str( self.map_matrix[ y + x *64 ] )
         
     def mset(self,x,y,v):
-        if x > 63 or x < 0 or y > 127 or y < 0:
-            return "FALSE"
+        if x >= 0 and x < 128 and y >= 0 and y < 64: 
+            self.map_matrix[ y + x*64] = v
         
-        self.map_matrix[ x + y*64] = v
-
     def color(self,c=None):
         if c == None:
             return self.pen_color
@@ -320,17 +330,18 @@ class Pico8(object):
         if c < 15 and c >=0:
             self.pen_color = c
 
-    def cls(self,frames=None):
-        self.CanvasHWND.fill(self.bg_color)
+    def cls(self,color_index=0):
+        if color_index >=0 and color_index < 16:
+            self.CanvasHWND.fill(self.display_palette[color_index])
 
     def flip(self):
         if self.HWND != None:
             self.HWND.blit(self.CanvasHWND,(0,0),self.cliprect)
 
     def Print(self,x,y,text,c=None):
-        c = self.color(c)
-    
-        imgText = self.Font.render(text,True, self.display_palette[c])
+        self.color(c)
+ 
+        imgText = self.Font.render(text,True, self.display_palette[self.pen_color])
         self.CanvasHWND.blit(imgText,(x,y))
 
     
@@ -406,7 +417,9 @@ class Pico8(object):
         pass
     
     def time(self):
-        return 0
+        curr_time = time.time()
+        
+        return int( curr_time - self.uptime)
 
     def palt(self,c=None,t=None):
         if c == None:
@@ -456,6 +469,12 @@ class Pico8(object):
                 return str(self.spriteflags[n])
             else:
                 return "0"
+    
+    def reboot(self):
+        self.uptime = time.time()
+    
+    def printh(self,text,filename=None,overwrite=None):
+        print(text)
 
 class PygameThread(lisp.Lisper):
     Width = 320
@@ -479,7 +498,7 @@ class PygameThread(lisp.Lisper):
     frames = 0
     
     def get_arg(self,index,env,args,force_format=None):
-        if index >= len(args)-1:
+        if index > len(args)-1:
             if force_format != None:
                 if force_format== "int":
                     return 0
@@ -552,6 +571,8 @@ class PygameThread(lisp.Lisper):
         self.intern('pal', lisp.SyntaxObject(self.pal))
 
         self.intern('fget', lisp.SyntaxObject(self.fget))
+        self.intern('reboot', lisp.SyntaxObject(self.fget))
+        self.intern('printh', lisp.SyntaxObject(self.printh))
 
 
         self.intern('res', lisp.SyntaxObject(self.res))
@@ -571,10 +592,10 @@ class PygameThread(lisp.Lisper):
             return
         assert self.Inited== True,"Not inited"
  
-        text  = self.get_arg(0,env,args)
-        x     = self.get_arg(1,env,args)
-        y     = self.get_arg(2,env,args)
-        c     = self.get_arg(3,env,args)
+        text  = self.get_arg(0,env,args,"str")
+        x     = self.get_arg(1,env,args,"int")
+        y     = self.get_arg(2,env,args,"int")
+        c     = self.get_arg(3,env,args,"int")
 
         self.Pico8.Print(x,y,text,c)
 
@@ -583,12 +604,12 @@ class PygameThread(lisp.Lisper):
     def cls(self,env,args):
         assert self.Inited== True,"Not inited"
         
-        frame = 1
+        frame = 0
         ans = 0
         if len(args) > 0:
-            ans = args[0].eval(env)
-        
-        frame = ans
+            ans = self.get_arg(0,env,args,"int")
+ 
+        frame = int(ans)
 
         self.Pico8.cls(frame)
         return "OK"
@@ -672,14 +693,14 @@ class PygameThread(lisp.Lisper):
     def spr(self,env,args):
         if len(args) < 7:
             return "Error ,draw_spr args "
-        n      = args[0].eval(env)
-        x      = args[1].eval(env)
-        y      = args[2].eval(env)
-        w      = args[3].eval(env)
-        h      = args[4].eval(env)
-        flip_x = args[5].eval(env)
-        flip_y = args[6].eval(env)
-
+        n      = self.get_arg(0,env,args,"int") 
+        x      = self.get_arg(1,env,args,"int")
+        y      = self.get_arg(2,env,args,"int")
+        w      = self.get_arg(3,env,args,"int")
+        h      = self.get_arg(4,env,args,"int")
+        flip_x = self.get_arg(5,env,args,"int")
+        flip_y = self.get_arg(6,env,args,"int")
+        
         if self.ConsoleType == "pico8":
             self.Pico8.spr(n,x,y,w,h,flip_x,flip_y)
 
@@ -700,11 +721,11 @@ class PygameThread(lisp.Lisper):
         return "OK"
 
     def rectfill(self,env,args):
-        x0 =  self.get_arg(0,env,args)
-        y0 =  self.get_arg(1,env,args)
-        x1 =  self.get_arg(2,env,args)
-        y1 =  self.get_arg(3,env,args)
-        col = self.get_arg(4,env,args)
+        x0 =  self.get_arg(0,env,args,"int")
+        y0 =  self.get_arg(1,env,args,"int")
+        x1 =  self.get_arg(2,env,args,"int")
+        y1 =  self.get_arg(3,env,args,"int")
+        col = self.get_arg(4,env,args,"int")
 
         self.Pico8.rectfill(x0,y0,x1,y1,col)
         
@@ -716,7 +737,7 @@ class PygameThread(lisp.Lisper):
         oy = args[1].eval(env)
         r  = args[2].eval(env)
         if len(args) > 3:
-            col = args[3].eval(env)
+            col = self.get_arg(3,env,args,"int")
             self.Pico8.circ(ox,oy,r,col)
         else:
             self.Pico8.circ(ox,oy,r)
@@ -724,12 +745,16 @@ class PygameThread(lisp.Lisper):
         return "OK"
 
     def circfill(self,env,args):
-        cx = self.get_arg(0,env,args)
-        cy = self.get_arg(1,env,args)
-        r  = self.get_arg(2,env,args)
-        col= self.get_arg(3,env,args)
-
-        self.Pico8.circfill(cx,cy,r,col)
+        cx = self.get_arg(0,env,args,"int")
+        cy = self.get_arg(1,env,args,"int")
+        r  = self.get_arg(2,env,args,"int")
+        
+        col= self.get_arg(3,env,args,"int")
+        
+        if len(args)> 3:
+            self.Pico8.circfill(cx,cy,r,col)
+        else:
+            self.Pico8.circfill(cx,cy,r)
 
         return "OK"
 
@@ -740,7 +765,7 @@ class PygameThread(lisp.Lisper):
         y1 = args[3].eval(env)
 
         if len(args) > 4:
-            col = args[4].eval(env)
+            col = self.get_arg(4,env,args,"int")
             self.Pico8.line(x0,y0,x1,y1,col)
         else:
             self.Pico8.line(x0,y0,x1,y1)
@@ -804,7 +829,16 @@ class PygameThread(lisp.Lisper):
         n = self.get_arg(0,env,args,"int")
         f = self.get_arg(1,env,args,"int")
         return self.Pico8.fget(n,f)
+
+    def reboot(self,env,args):
+        self.Pico8.reboot()
+        return "OK"
+
+    def printh(self,env,args):
+        text = self.get_arg(0,env,args)
+        self.Pico8.printh(text)
         
+         
     def print_text(self,font,x,y,text,color=(255,255,255)):
         imgText = font.render(text,True,color)
         if self.Screen.get_locked() == False:
@@ -864,7 +898,7 @@ class PygameThread(lisp.Lisper):
                             self.Pico8.Resource[self.Resource] = data
 
 
-    def run(self):
+    def eventloop(self):
         global DT,KeyLog
         try:
             while self.Inited: 
@@ -901,7 +935,7 @@ def start_pygame(parent,child):
     api.parent_conn = parent 
     t = Thread(target=api.read_data_thread)
     t.start()
-    api.run()
+    api.eventloop()
 
 def recv_all2(socket,seg_length):
     ret = ""
@@ -1027,9 +1061,11 @@ def start_tcp_server():
                                         break
 
                                     else:
-                                        connection.sendall(ret+"\n")
+                                        connection.sendall(str(ret)+"\n")
+
                                 except Exception,e:
-                                    print(str(e))
+                                    PrintException()
+                                    print("exception on pipe sending data: ",str(e))
                                     parent_conn.close()
                                     child_conn.close()
                                     

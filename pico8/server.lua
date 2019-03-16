@@ -203,6 +203,15 @@ function server.fget(n,f)
   return TCP.send(thing)
 end
 
+function server.reboot()
+	local thing = "(reboot)"
+	TCP.send(thing)
+end
+
+function server.printh(text)
+	local thing = safe_format("(printh \"%s\")",text)
+	TCP.send(thing)
+end
 
 function server.music(n,fade_len,channel_mask)
 
