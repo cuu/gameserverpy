@@ -19,12 +19,12 @@ DT = pygame.time.Clock().tick(40)   # fps in ms,eg:50
 
 KeyLog = {}
 GameShellKeys = {}
-GameShellKeys["left"] = pygame.K_LEFT
+GameShellKeys["left"]  = pygame.K_LEFT
 GameShellKeys["right"] = pygame.K_RIGHT
-GameShellKeys["up"]   = pygame.K_UP
-GameShellKeys["down"] = pygame.K_DOWN
-GameShellKeys["u"]   = pygame.K_u  ## GamePad X
-GameShellKeys["i"]   = pygame.K_i  ## GamePad Y
+GameShellKeys["up"]    = pygame.K_UP
+GameShellKeys["down"]  = pygame.K_DOWN
+GameShellKeys["u"]     = pygame.K_u  ## GamePad X
+GameShellKeys["i"]     = pygame.K_i  ## GamePad Y
 GameShellKeys["return"] = pygame.K_RETURN ##GamePad start
 GameShellKeys["escape"] = pygame.K_ESCAPE ##GamePad menu
 
@@ -150,8 +150,6 @@ class Pico8(object):
 
         print("set_map ",tiles)
 
-
-
     def set_shared_map(self):
         shared = 0
         if self.version > 3:
@@ -207,7 +205,7 @@ class Pico8(object):
 
         self.set_shared_map()
     
-    def spr(self,n,x,y,w,h,flip_x,flip_y): ## flip 翻转 ,负数是反方向
+    def spr(self,n,x,y,w,h,flip_x,flip_y): 
         if self.CanvasHWND == None:
             return
 
@@ -623,16 +621,23 @@ class PygameThread(lisp.Lisper):
         keycode_string = args[0].eval(env)
         player_idx     = args[1].eval(env)
         if keycode_string in GameShellKeys: 
-            keycode = GameShellKeys[keycode_string]
-            
-            if keycode in KeyLog and  KeyLog[keycode] > 0:
+            keycode = GameShellKeys[keycode_string]      
+            if keycode in KeyLog and  KeyLog[keycode] >= 0:
                 return "TRUE"
-            else:
-                return "FALSE"        
-        else:
-            return "FALSE"
+        
+        
+        return "FALSE"
    
     def btnp(self,env,args):
+        keycode_string = args[0].eval(env)
+        player_idx     = args[1].eval(env)
+        if keycode_string in GameShellKeys: 
+            keycode = GameShellKeys[keycode_string]
+            if keycode in KeyLog:
+                v = KeyLog[keycode]
+                if (v == 0 or (v >= 12 and v % 4 == 0)):
+                    return "TRUE"
+       
         return "FALSE"
 
     def pset(self,env,args):
@@ -882,7 +887,7 @@ class PygameThread(lisp.Lisper):
                         #print("quit ....")
                         return             
                 if event.type == pygame.KEYUP: 
-                     KeyLog[event.key] = 0
+                     KeyLog[event.key] = -1
                 
     #            pygame.time.delay(self.DT)
                 pygame.time.delay(DT)
