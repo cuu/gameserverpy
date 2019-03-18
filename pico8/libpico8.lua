@@ -47,7 +47,6 @@ function api.color(c)
   assert(c >= 0 and c <= 16,string.format('c is %s',c))
   server.color(c)
 
---  love.graphics.setColor(c*16,0,0,255)
 end
 
 function api.pset(x,y,c)
@@ -59,23 +58,6 @@ end
 
 
 function api.print(str,x,y,col)
-  if col then api.color(col) end 
-  local canscroll = y==nil
-  if y==nil then
-    y = pico8.cursor[2]
-    pico8.cursor[2] = pico8.cursor[2] + 6 
-  end 
-  if x==nil then
-    x = pico8.cursor[1]
-  end 
-  if canscroll and y > 121 then
-    local c = col or pico8.color
-    draw.scroll(6)
-    y = 120 
-    api.rectfill(0,y,127,y+6,0)
-    api.color(c)
-    api.cursor(0, y+6)
-  end 
   server.print(str,x,y,col)		
 end
 
@@ -134,12 +116,17 @@ function api.btnp(i,p)
 end
 
 function api.mget(x,y)
+	if x == nil or y == nil then return 0 end
+
 	local ret = server.mget(x,y)
 	return tonumber(ret)
 end
 
 function api.mset(x,y,v)
-	server.mset(x,y,v)
+	if x == nil or y == nil then return end
+	v = v or 0
+
+	server.mset(api.flr(x),api.flr(y),api.flr(v))
 end
 
 
@@ -482,6 +469,11 @@ end
 function api.map(cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask)
   cel_x = cel_x or 0
   cel_y = cel_y or 0
+	cel_w = cel_w or 0
+	cel_h = cel_h or 0	
+	
+	sx = sx or 0
+	sy = sy or 0
 
   cel_x = api.flr(cel_x)
   cel_y = api.flr(cel_y)
@@ -616,7 +608,7 @@ end
 
 function api.fget(n,f)
   if n == nil then return nil end
-  server.fget(n,f)
+  return tonumber( server.fget(n,f) )
 end 
 
 function api.music(n,fade_len,channel_mask)
@@ -625,6 +617,14 @@ end
 
 function api.sfx(n,channel,offset)
 
+end
+
+function api.clip(x,y,w,h)
+	if type(x) == 'number' then
+		server.clip(x,y,w,h)
+	else
+		server.clip()
+	end
 end
 
 return api

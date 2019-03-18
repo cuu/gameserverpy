@@ -59,30 +59,31 @@ class Pico8(object):
     
     Resource = {}   
     palette = [
-        pygame.Color(0,0,0,255),
-        pygame.Color(29,43,83,255),
-        pygame.Color(126,37,83,255),
-        pygame.Color(0,135,81,255),
-        pygame.Color(171,82,54,255),
-        pygame.Color(95,87,79,255),
-        pygame.Color(194,195,199,255),
-        pygame.Color(255,241,232,255),
-        pygame.Color(255,0,77,255),
-        pygame.Color(255,163,0,255),
-        pygame.Color(255,240,36,255),
-        pygame.Color(0,231,86,255),
-        pygame.Color(41,173,255,255),
-        pygame.Color(131,118,156,255),
-        pygame.Color(255,119,168,255),
-        pygame.Color(255,204,170,255)]
+        pygame.Color(0,0,0),
+        pygame.Color(29,43,83),
+        pygame.Color(126,37,83),
+        pygame.Color(0,135,81),
+        pygame.Color(171,82,54),
+        pygame.Color(95,87,79),
+        pygame.Color(194,195,199),
+        pygame.Color(255,241,232),
+        pygame.Color(255,0,77),
+        pygame.Color(255,163,0),
+        pygame.Color(255,240,36),
+        pygame.Color(0,231,86),
+        pygame.Color(41,173,255),
+        pygame.Color(131,118,156),
+        pygame.Color(255,119,168),
+        pygame.Color(255,204,170)]
 
     draw_palette = []
+    draw_palette_colors = []
     display_palette = []
     pal_transparent = []
 
     cliprect= None
     pen_color = 1
-    _cursor = (0,0)
+    _cursor = [0,0]
     memory = {}
     _palette_modified = False
     
@@ -91,14 +92,32 @@ class Pico8(object):
     def __init__(self):
         self.uptime = time.time()
 
-        self.CanvasHWND = pygame.Surface((self.Width,self.Height),pygame.SRCALPHA, 32).convert_alpha()
-        self.gfx_surface = pygame.Surface((self.Width,self.Height),pygame.SRCALPHA, 32).convert_alpha()
+        self.DisplayCanvas = pygame.Surface((self.Width,self.Height),0,8) ## last one,blit to the screen,display_palette
+
+        self.DrawCanvas    = pygame.Surface((self.Width,self.Height),0,8) ##       no alpha, draw_palette  
+        self.TextCanvas    = pygame.Surface((self.Width,self.Height),0,8) ## text , no alpha, draw_palette 
+        self.SpriteCanvas  = pygame.Surface((self.Width,self.Height),0,8) ## Sprite, alpha,  draw_palette 
+
+        self.gfx_surface = pygame.Surface((self.Width,self.Height),0,8) #sprite_sheet
+
+        self.DrawCanvas.set_palette( self.palette)
+        self.TextCanvas.set_palette( self.palette)
+        
+        self.SpriteCanvas.set_palette( self.palette) 
+
+#        self.DisplayCanvas.set_palette(self.palette)
+
+        self.TextCanvas.set_colorkey(0)
+        self.DrawCanvas.set_colorkey(0)
+
 
         self.map_matrix  = [0 for x in range(64*128)]
 
         self.spriteflags = [0 for x in range(256)]
         for i in range(16):
             self.draw_palette.append(i)
+            self.draw_palette_colors.append(  self.palette[i] )
+
             if i == 0:
                 self.pal_transparent.append(0)
             else:
@@ -106,12 +125,23 @@ class Pico8(object):
 
             self.display_palette.append(self.palette[i])
         
-        self.Font = pygame.font.Font("PICO-8.ttf",4)
+        self.Font = pygame.font.Font("PICO-8.ttf",5)
         
         for i in range(4):
             self.memory[0x5f20+i] = 0
         
+        self.SpriteCanvasSetPalt()
+        self.sync_draw_pal()
  
+    def SpriteCanvasSetPalt(self):
+        self.SpriteCanvas.set_colorkey()
+        for i in range(16):
+            if self.pal_transparent[i] == 0:
+                self.SpriteCanvas.set_colorkey(i)
+                 
+    def sync_draw_pal(self):
+        for i in range(16):
+            self.draw_palette_colors[i] = self.palette[ self.draw_palette[i] ]
 
     def set_gff(self): # red=1, orange=2, yellow=4, green=8, blue=16, purple=32, pink=64, peach=128
         if "gff" not in self.Resource:
@@ -169,21 +199,21 @@ class Pico8(object):
             tx = 0
             ty = 32
             for sy in range(64,128):
-                for sx in range(0,127,2):
-                    col = self.gfx_surface.get_at((sx,sy))
-                    r = col.r
-                    lo = int(math.floor(r/16))
-                    col = self.gfx_surface.get_at((sx+1,sy))
-                    r = col.r
-                    hi = int(math.floor(r/16))
+                for sx in range(0,128,2):
+                    col1 = self.gfx_surface.get_at((sx,sy))
+#                    lo = int(math.floor(col1.r/16))
+                    lo = self.gfx_surface.map_rgb(col1)
+                    col2 = self.gfx_surface.get_at((sx+1,sy))
+#                    hi = int(math.floor(col2.r/16))
+                    hi = self.gfx_surface.map_rgb(col2)
+                
                     v = (hi << 4 ) | lo
-                    
                     #print(ty,tx)
                     self.map_matrix[ty+tx*64] = v
                     
                     shared  = shared + 1
                     tx = tx + 1
-                    if tx == self.Width:
+                    if tx == 128:
                         tx = 0
                         ty = ty + 1
 
@@ -203,13 +233,11 @@ class Pico8(object):
             if len(rowpixel) > 10:
                 for digi in rowpixel:
                     v = int(digi,16)
-                    index = int( math.floor( ((v*16.0)/256.0)*16.0 ) )
-                    alpha = self.pal_transparent[index]
-                    color = self.display_palette[index]
+#                    index = int( math.floor( ((v*16.0)/256.0)*16.0 ) )
 #                    print(color)
-                    color.a = alpha*255
- 
-                    self.gfx_surface.set_at((col,row),color)
+#                    self.gfx_surface.set_at((col,row),(v*16,v*16,v*16))
+                    self.gfx_surface.set_at((col,row),v)
+
                     col+=1
                     if col == 128:
                         col = 0
@@ -241,10 +269,8 @@ class Pico8(object):
         if _sw == 0 or _sh == 0:
             return
 
-        gfx_piece = pygame.Surface((_sw,_sh),pygame.SRCALPHA, 32).convert_alpha()
-
-        gfx_piece.blit(self.gfx_surface,(0,0,_sw,_sh),(start_x,start_y,_sw,_sh))
-        
+        gfx_piece = self.gfx_surface.subsurface(( start_x,start_y,_sw,_sh))
+         
         xflip = False
         yflip = False
         if flip_x > 0:
@@ -254,7 +280,10 @@ class Pico8(object):
 
         gfx_piece = pygame.transform.flip(gfx_piece,xflip,yflip)
         
-        self.CanvasHWND.blit(gfx_piece,(x,y))
+        self.SpriteCanvasSetPalt()
+        self.SpriteCanvas.blit(gfx_piece,(x,y))
+        
+        self.DrawCanvas.blit(gfx_piece,(x,y))        
 
     def sspr(self,sx,sy,sw,sh,dx,dy,dw,dh,flip_x,flip_y):
         if sx + sw > self.Width:
@@ -266,10 +295,8 @@ class Pico8(object):
         if sw <= 0 or sh <= 0:
             return
 
-        gfx_piece = pygame.Surface((sw,sh),pygame.SRCALPHA, 32).convert_alpha()
+        gfx_piece = self.gfx_surface.subsurface(( sx,sy,sw,sh))
 
-        gfx_piece.blit(self.gfx_surface,(0,0,sw,sh),(sx,sy,sw,sh))
- 
         xflip = False
         yflip = False
         if flip_x > 0:
@@ -281,8 +308,9 @@ class Pico8(object):
         
         if dw != sw or dh != sh:
             gfx_piece = pygame.transform.scale( gfx_piece,dw,dh)
- 
-        self.CanvasHWND.blit(gfx_piece,(dx,dy))
+        
+        self.SpriteCanvasSetPalt()
+        self.SpriteCanvas.blit(gfx_piece,(dx,dy))
 
     def draw_map(self,n,x,y):
         idx = n % 16
@@ -295,9 +323,8 @@ class Pico8(object):
 
         src_rect = pygame.Rect(start_x,start_y, w_,h_)
         dest_rect = pygame.Rect(x,y,w_,h_)
-        
          
-        self.CanvasHWND.blit(self.gfx_surface,dest_rect,src_rect)
+        self.DrawCanvas.blit(self.gfx_surface,dest_rect,src_rect)
 
     def map(self,cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask):
         for y in range(0,cel_h):
@@ -315,7 +342,7 @@ class Pico8(object):
     
     def mget(self,x,y):
         if  y > 63 or x < 0 or x > 127 or y < 0:
-            return "FALSE"
+            return "0"
         
         return str( self.map_matrix[ y + x *64 ] )
         
@@ -326,56 +353,77 @@ class Pico8(object):
     def color(self,c=None):
         if c == None:
             return self.pen_color
+        
+        c = int(c)
 
         if c < 15 and c >=0:
             self.pen_color = c
 
     def cls(self,color_index=0):
         if color_index >=0 and color_index < 16:
-            self.CanvasHWND.fill(self.display_palette[color_index])
-
+            self.DisplayCanvas.fill(color_index)
+        
     def flip(self):
         if self.HWND != None:
-            self.HWND.blit(self.CanvasHWND,(0,0),self.cliprect)
+            self.DisplayCanvas.fill((3,5,10))
 
-    def Print(self,x,y,text,c=None):
-        self.color(c)
+            self.DisplayCanvas.blit(self.TextCanvas,(0,0))            
+            self.DisplayCanvas.blit(self.DrawCanvas,(0,0))
+            self.DisplayCanvas.blit(self.SpriteCanvas,(0,0))
+            
+            bigger = pygame.transform.scale(self.DisplayCanvas,(240,240))
+            self.HWND.blit(bigger,(0,0))
+            self.SpriteCanvas.fill(0)
+            self.DrawCanvas.fill(0)
+            self.TextCanvas.fill(0)
+
+    def Print(self,text,x,y,c=None):
+        self.color(c) 
+        if x == None:
+            x = self._cursor[0]
+            y = self._cursor[1]
+            self._cursor[1] += 6
+        
+        if x != None and y != None:
+            self._cursor[0] = x
+            self._cursor[1] = y
  
-        imgText = self.Font.render(text,True, self.display_palette[self.pen_color])
-        self.CanvasHWND.blit(imgText,(x,y))
-
-    
+        imgText = self.Font.render(text,False, self.draw_palette_colors[ self.draw_palette[ self.pen_color]])
+        self.TextCanvas.blit(imgText,(x,y))
+ 
     def pset(self,x,y,c=0):
         if c > 15:
             return
         if x >=0 and x < self.Width and y >=0 and y < self.Height:
-            color = self.display_palette[c]
-            self.gfx_matrix[x+y*self.Width] = c
-            self.gfx_surface.set_at((col,row),color)
-   
+            color = self.draw_palette[c]
+            self.DrawCanvas.set_at((col,row),color)
+ 
     
     def pget(self,x,y):
+        
         if x >=0 and x < self.Width and y >=0 and y < self.Height:
-            return self.gfx_matrix[x+y*self.Width]
+            return self.DrawCanvas.get_at((x,y))
         else:
             return 0
     
 
     def clip(self,x,y,w,h):
-        if x == 0 and y == 0 and w == 0 and h == 0:
+        if x == None:
             self.cliprect = None
         else:    
             self.cliprect = pygame.Rect(x,y,w,h)
+        
+        self.DisplayCanvas.set_clip(self.cliprect)
 
 
     def cursor(self,x,y):
-        self._cursor = (x,y)
+        self._cursor = [x,y]
 
     
     def rect(self,x0,y0,x1,y1,col=None):
         self.color(col)
         rect_ = pygame.Rect(x0+1,y0+1,x1-x0,y1-y0)
-        pygame.draw.rect(self.CanvasHWND,self.display_palette[self.pen_color], rect_,1)
+        pygame.draw.rect(self.DrawCanvas, self.draw_palette[self.pen_color], rect_,1)
     
     def rectfill(self,x0,y0,x1,y1, col=None):
         self.color(col)
@@ -392,22 +440,22 @@ class Pico8(object):
             y0=y0-h
 
         rect_ = pygame.Rect(x0,y0,w,h)
-        pygame.draw.rect(self.CanvasHWND,self.display_palette[self.pen_color], rect_)
+        pygame.draw.rect(self.DrawCanvas, self.draw_palette[self.pen_color], rect_)
     
     def circ(self,ox,oy,r,col=None):
         self.color(col)
         r = math.floor(r)
-        pygame.draw.circle(self.CanvasHWND,self.display_palette[self.pen_color],(ox,oy),r,1)
+        pygame.draw.circle(self.DrawCanvas, self.draw_palette[self.pen_color],(ox,oy),r,1)
 
     def circfill(self,cx,cy,r,col=None):
         self.color(col)
 
-        pygame.draw.circle(self.CanvasHWND,self.display_palette[self.pen_color],(cx,cy),r,0)
+        pygame.draw.circle(self.DrawCanvas,self.draw_palette[self.pen_color],(cx,cy),r,0)
 
     
     def line(self,x0,y0,x1,y1,col=None):
         self.color(col)
-        pygame.draw.line(self.CanvasHWND,self.display_palette[self.pen_color],(x0,y0),(x1,y1),1)
+        pygame.draw.line(self.DrawCanvas,self.draw_palette[self.pen_color],(x0,y0),(x1,y1),1)
 
     
     def music(self,fade_len=None,channel_mask=None):
@@ -424,18 +472,21 @@ class Pico8(object):
     def palt(self,c=None,t=None):
         if c == None:
             for i in range(16):
-                self.draw_palette[i] = 0
                 if i == 0:
                     self.pal_transparent[i] = 0
                 else:
                     self.pal_transparent[i] = 1
+
+#            self.SpriteCanvasSetPalt()
         else:
             c = c % 16
             if t == None:
                 self.pal_transparent[c] = 1
             else:
                 self.pal_transparent[c] = 0
-
+        
+            self.SpriteCanvasSetPalt()
+ 
     def pal(self,c0=None,c1=None,p=None):
         if c0 ==None:
             if self._palette_modified == False:
@@ -443,20 +494,38 @@ class Pico8(object):
             for i in range(16):
                 self.draw_palette[i] = i
                 self.display_palette[i] = self.palette[i]
-
+            
             self.palt()
+
+            self.sync_draw_pal()
+
+            #self.DisplayCanvas.set_palette(self.display_palette)
+            #self.DrawCanvas.set_palette(self.draw_palette_colors)
+            self.SpriteCanvas.set_palette(self.draw_palette_colors)
+            self.TextCanvas.set_palette(self.draw_palette_colors)
+ 
+            self._palette_modified = False
 
         elif p == 1 and c1 != None:
             c0 = c0 % 16
             c1 = c1 % 16
             self.display_palette[c0] = self.palette[c1]
             self._palette_modified = True
+
+            #self.DisplayCanvas.set_palette(self.display_palette)
         elif c1 != None and p == None:
             c0 = c0 % 16
             c1 = c1 % 16
             self.draw_palette[c0] = c1
             self._palette_modified = True
-    
+
+            self.sync_draw_pal()
+
+#            self.DrawCanvas.set_palette(self.draw_palette_colors)
+            self.SpriteCanvas.set_palette(self.draw_palette_colors)
+            self.TextCanvas.set_palette(self.draw_palette_colors)
+ 
+
     def fget(self,n,f=None):
         if f != None:
             if n > 255:
@@ -570,6 +639,8 @@ class PygameThread(lisp.Lisper):
 
         self.intern('pal', lisp.SyntaxObject(self.pal))
 
+        self.intern('clip', lisp.SyntaxObject(self.clip))
+
         self.intern('fget', lisp.SyntaxObject(self.fget))
         self.intern('reboot', lisp.SyntaxObject(self.fget))
         self.intern('printh', lisp.SyntaxObject(self.printh))
@@ -593,11 +664,16 @@ class PygameThread(lisp.Lisper):
         assert self.Inited== True,"Not inited"
  
         text  = self.get_arg(0,env,args,"str")
-        x     = self.get_arg(1,env,args,"int")
-        y     = self.get_arg(2,env,args,"int")
-        c     = self.get_arg(3,env,args,"int")
-
-        self.Pico8.Print(x,y,text,c)
+        x     = self.get_arg(1,env,args)
+        y     = self.get_arg(2,env,args)
+        c     = self.get_arg(3,env,args)
+        
+        if x != None:
+            x = int(x)
+        if y != None:
+            y = int(y)
+         
+        self.Pico8.Print(text, x,y,c)
 
         return "OK"
 
@@ -621,7 +697,7 @@ class PygameThread(lisp.Lisper):
         if self.ConsoleType == "pico8":
             self.Pico8.flip()
         
-        pygame.display.flip()
+        pygame.display.update()
 
         self.frames+=1
 
@@ -833,14 +909,27 @@ class PygameThread(lisp.Lisper):
     def reboot(self,env,args):
         self.Pico8.reboot()
         return "OK"
+    
+    def clip(self,env,args):
+        x = self.get_arg(0,env,args)
+        if x == None:
+            self.Pico8.clip()
+        else:
+            x = int(x)
+            y = self.get_arg(1,env,args,"int")
+            w = self.get_arg(1,env,args,"int")
+            h = self.get_arg(1,env,args,"int")
+            self.Pico8.clip(x,y,w,h)
 
+        return "OK"
+        
     def printh(self,env,args):
         text = self.get_arg(0,env,args)
         self.Pico8.printh(text)
         
          
     def print_text(self,font,x,y,text,color=(255,255,255)):
-        imgText = font.render(text,True,color)
+        imgText = font.render(text,False,color)
         if self.Screen.get_locked() == False:
             self.Screen.blit(imgText,(int(x)+self.OffsetX,int(y)+self.OffsetY))
 
@@ -858,15 +947,14 @@ class PygameThread(lisp.Lisper):
 
         SCREEN_SIZE = (self.Width,self.Height)
         self.bg_color = pygame.Color(0,0,0)
-        self.Screen = pygame.display.set_mode(SCREEN_SIZE, 0, 32)
+        self.Screen = pygame.display.set_mode(SCREEN_SIZE,0,8)
         pygame.event.set_allowed(None)
         pygame.event.set_allowed([pygame.KEYDOWN,pygame.KEYUP])
         
         self.Pico8 = Pico8()
         self.Pico8.HWND = self.Screen
-        #self.Pico8.cls(1)
-        #self.Pico8.flip()
-
+        
+        
     def quit_window(self):
         print("quiting...")
         self.child_conn.send("QUIT")

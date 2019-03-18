@@ -103,7 +103,8 @@ function new_sandbox()
 		reboot = api.reboot,
 		printh = api.printh,
 		tostr  = api.tostr,
-    mapdraw = api.map
+    mapdraw = api.map,
+		run    = api.run
 
    }
 end
@@ -115,9 +116,10 @@ local frame_time = 1/api.pico8.fps
 function draw(cart)
 	
 	while true do
+
 		if cart._update then cart._update() end
 		if cart._draw   then cart._draw() end
-	
+		
 		--api.sleep(frame_time/30)
 		api.flip()
 		frames= frames+1
@@ -125,14 +127,12 @@ function draw(cart)
 
 end
 
-function main(file)
-	api.load_p8_text(file)
-
+function api.run()
 	local cart = new_sandbox()
 	local ok,f,e = pcall(load,api.loaded_code)
   if not ok or f==nil then
     log('=======8<========')
-    log(loaded_code)
+    log(api.loaded_code)
     log('=======>8========')
     error('Error loading lua: '..tostring(e))
   else
@@ -149,7 +149,13 @@ function main(file)
 		
 		draw(cart)
   end
+end
+
+function main(file)
+	api.load_p8_text(file)
 	
+	api.run()
+
 end
 
 if #arg > 1 then

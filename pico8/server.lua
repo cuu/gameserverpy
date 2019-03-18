@@ -21,7 +21,19 @@ function server.scroll(dy)
 end
 
 function server.print(str,x,y,col)
-	local thing = safe_format("(print \"%s\" %d %d %d)",str,x,y,col)
+	local thing
+	if x == nil then
+		thing = safe_format("(print \"%s\")",str)
+	end
+
+	if x ~= nil and col == nil  then 
+		thing = safe_format("(print \"%s\" %d %d)",str,x,y)
+	end
+
+	if x ~= nil and col ~= nil then
+		thing = safe_format("(print \"%s\" %d %d %d)",str,x,y,col)
+	end
+
 	return TCP.send(thing)
 
 end
@@ -206,6 +218,18 @@ end
 function server.reboot()
 	local thing = "(reboot)"
 	TCP.send(thing)
+end
+
+function server.clip(x,y,w,h)
+	local thing
+	if type(x) == 'number' then
+		thing = safe_format("(clip %d %d %d %d)",x,y,w,h)
+	else
+		thing = "(clip)"
+	end
+
+	TCP.send(thing)
+
 end
 
 function server.printh(text)
