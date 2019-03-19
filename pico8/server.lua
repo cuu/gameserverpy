@@ -194,9 +194,9 @@ function server.palt(c,t)
   else
    t = t or false
    if t == true then
-     thing = safe_format("(pal %d true)",c)
+     thing = safe_format("(palt %d 1)",c)
    else
-     thing = safe_format("(pal %d false)",c)
+     thing = safe_format("(palt %d 0)",c)
    end
   end
 

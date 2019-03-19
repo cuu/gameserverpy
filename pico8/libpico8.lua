@@ -52,7 +52,7 @@ end
 function api.pset(x,y,c)
   if not c then return end 
 
-  server.pset(x,y,c)
+  server.pset(api.flr(x),api.flr(y),api.flr(c))
 
 end
 
@@ -581,7 +581,7 @@ function api.line(x0,y0,x1,y1,col)
 end
 
 function api.time()
-  ret = server.time()
+  local ret = server.time()
   return tonumber(ret)
 end
 
@@ -594,7 +594,22 @@ function api.printh(text,filename,overwrite)
 end
 
 function api.pal(c0,c1,p)
-    server.pal(c0,c1,p)
+		p = p or 0
+		if c1 == false then
+			c1 = nil
+		end
+	
+		if p == true then
+			p = 1
+		end
+
+		if p == false then
+			 p = 0
+		end
+	
+	
+		server.pal(c0,c1,p)
+			
 end
 
 function api.palt(c,t)
@@ -608,7 +623,15 @@ end
 
 function api.fget(n,f)
   if n == nil then return nil end
-  return tonumber( server.fget(n,f) )
+  local ret =  tonumber( server.fget(n,f) )
+--	print(n,f,ret)
+	if ret == 0 then
+		return false
+	end
+	if ret > 0 then
+		return true
+	end
+--		return 1
 end 
 
 function api.music(n,fade_len,channel_mask)

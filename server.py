@@ -80,7 +80,7 @@ class Pico8(object):
     draw_palette_colors = []
     display_palette = []
     pal_transparent = []
-
+    
     cliprect= None
     pen_color = 1
     _cursor = [0,0]
@@ -88,6 +88,8 @@ class Pico8(object):
     _palette_modified = False
     
     uptime = None ## when pico8 is up
+    
+    _CurrentCanvas = None
 
     def __init__(self):
         self.uptime = time.time()
@@ -166,7 +168,8 @@ class Pico8(object):
 
                         self.spriteflags[sprite] = v 
                         sprite+=1
-                         
+        else:
+            print("gff array length error ", len(data_array))                 
 
         print("spriteflags:", sprite)
 
@@ -179,16 +182,15 @@ class Pico8(object):
         tiles = 0
         mapdata = self.Resource["map"]
         mapdata_array = mapdata.split("\n")
-        if len(mapdata_array) % 8 == 0:
-            for rowpixel in mapdata_array:
-                for i in range(0,len(rowpixel),2):
-                    v = int(rowpixel[i]+rowpixel[i+1],16)
-                    self.map_matrix[row+col*64] = v
-                    tiles +=1
-                    col = col + 1
-                    if col == self.Width:
-                        col = 0
-                        row = row + 1
+        for rowpixel in mapdata_array:
+            for i in range(0,len(rowpixel),2):
+                v = int(rowpixel[i]+rowpixel[i+1],16)
+                self.map_matrix[row+col*64] = v
+                tiles +=1
+                col = col + 1
+                if col == self.Width:
+                    col = 0
+                    row = row + 1
         
 
         print("set_map ",tiles)
@@ -321,10 +323,11 @@ class Pico8(object):
         w_ = 8
         h_ = 8 
 
-        src_rect = pygame.Rect(start_x,start_y, w_,h_)
-        dest_rect = pygame.Rect(x,y,w_,h_)
+#        src_rect = pygame.Rect(start_x,start_y, w_,h_)
+#        dest_rect = pygame.Rect(x,y,w_,h_)
+        gfx_piece = self.gfx_surface.subsurface(start_x,start_y,w_,h_)
          
-        self.DrawCanvas.blit(self.gfx_surface,dest_rect,src_rect)
+        self.SpriteCanvas.blit(gfx_piece,(x,y))
 
     def map(self,cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask):
         for y in range(0,cel_h):
@@ -338,7 +341,8 @@ class Pico8(object):
                         else:
                             if (self.spriteflags[v] & bitmask) != 0:
                                 self.draw_map(v,sx+x*8,sy+y*8)
-    
+                else:
+                    print("addr >= 8192", addr)
     
     def mget(self,x,y):
         if  y > 63 or x < 0 or x > 127 or y < 0:
@@ -359,10 +363,15 @@ class Pico8(object):
         if c < 15 and c >=0:
             self.pen_color = c
 
-    def cls(self,color_index=0):
-        if color_index >=0 and color_index < 16:
-            self.DisplayCanvas.fill(color_index)
+    def cls(self,color_index=None):
+        if color_index == None:
+            self.DrawCanvas.fill(0)
+
+        elif color_index >=0 and color_index < 16:
+            self.DrawCanvas.fill(color_index)
         
+        self._cursor=[0,0]
+ 
     def flip(self):
         if self.HWND != None:
             self.DisplayCanvas.fill((3,5,10))
@@ -394,9 +403,10 @@ class Pico8(object):
     def pset(self,x,y,c=0):
         if c > 15:
             return
+        print(x,y,c)
         if x >=0 and x < self.Width and y >=0 and y < self.Height:
             color = self.draw_palette[c]
-            self.DrawCanvas.set_at((col,row),color)
+            self.DrawCanvas.set_at((x,y),color)
  
     
     def pget(self,x,y):
@@ -477,10 +487,10 @@ class Pico8(object):
                 else:
                     self.pal_transparent[i] = 1
 
-#            self.SpriteCanvasSetPalt()
+            self.SpriteCanvasSetPalt()
         else:
             c = c % 16
-            if t == None:
+            if t == 0:
                 self.pal_transparent[c] = 1
             else:
                 self.pal_transparent[c] = 0
@@ -638,12 +648,14 @@ class PygameThread(lisp.Lisper):
         self.intern('time', lisp.SyntaxObject(self.time))
 
         self.intern('pal', lisp.SyntaxObject(self.pal))
+        self.intern('palt', lisp.SyntaxObject(self.palt))
 
         self.intern('clip', lisp.SyntaxObject(self.clip))
 
         self.intern('fget', lisp.SyntaxObject(self.fget))
         self.intern('reboot', lisp.SyntaxObject(self.fget))
         self.intern('printh', lisp.SyntaxObject(self.printh))
+        self.intern('pset', lisp.SyntaxObject(self.pset))
 
 
         self.intern('res', lisp.SyntaxObject(self.res))
@@ -684,10 +696,11 @@ class PygameThread(lisp.Lisper):
         ans = 0
         if len(args) > 0:
             ans = self.get_arg(0,env,args,"int")
- 
-        frame = int(ans)
+            frame = int(ans)
+            self.Pico8.cls(frame)
+        else:
+            self.Pico8.cls()
 
-        self.Pico8.cls(frame)
         return "OK"
     
     def flip(self,env,args):
@@ -739,12 +752,12 @@ class PygameThread(lisp.Lisper):
 
     def pset(self,env,args):
         assert self.Inited== True,"Not inited"
-        if len(args) < 6:
-            return "Error,draw_point args"
+        if len(args) < 3:
+            return "Error,pset args"
        
-        x = int(args[0].eval(env))
-        y = int(args[1].eval(env))
-        v = int(args[2].eval(env))
+        x = self.get_arg(0,env,args,"int")
+        y = self.get_arg(1,env,args,"int")
+        v = self.get_arg(2,env,args,"int")
 
         self.Pico8.pset(x,y,v)
         
@@ -868,14 +881,6 @@ class PygameThread(lisp.Lisper):
 
         return self.Pico8.pget(x,y)
 
-    def pset(self,env,args):
-        x = args[0].eval(env)
-        y = args[1].eval(env)
-        v = args[2].eval(env)
-
-        self.Pico8.pset(x,y,v)
-        return "OK"
-
     def time(self,env,args):
         return str(self.Pico8.time())
     
@@ -896,15 +901,21 @@ class PygameThread(lisp.Lisper):
     def palt(self,env,args):
         c = self.get_arg(0,env,args)
         t = self.get_arg(1,env,args)
-
-        self.Pico8.palt(c,t)
         
+        if c == None: 
+            self.Pico8.palt()
+        else:
+            self.Pico8.palt(int(c),int(t))
         return "OK"
    
     def fget(self,env,args):
         n = self.get_arg(0,env,args,"int")
-        f = self.get_arg(1,env,args,"int")
-        return self.Pico8.fget(n,f)
+        f = self.get_arg(1,env,args)
+        if f == None:
+            return self.Pico8.fget(n)
+        else:
+            return self.Pico8.fget(n,int(f))
+
 
     def reboot(self,env,args):
         self.Pico8.reboot()
