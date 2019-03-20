@@ -84,6 +84,9 @@ class Pico8(object):
     cliprect= None
     pen_color = 1
     _cursor = [0,0]
+    _camera_dx = 0 ## shake
+    _camera_dy = 0
+    
     memory = {}
     _palette_modified = False
     
@@ -113,6 +116,7 @@ class Pico8(object):
         self.DrawCanvas.set_colorkey(0)
 
         self.gfx_surface.set_palette(self.palette)
+        self.gfx_surface.set_colorkey(0)
 
         self.map_matrix  = [0 for x in range(64*128)]
 
@@ -128,7 +132,7 @@ class Pico8(object):
 
             self.display_palette.append(self.palette[i])
         
-        self.Font = pygame.font.Font("PICO-8.ttf",5)
+        self.Font = pygame.font.Font("PICO-8.ttf",4)
         
         for i in range(4):
             self.memory[0x5f20+i] = 0
@@ -141,6 +145,7 @@ class Pico8(object):
         for i in range(16):
             if self.pal_transparent[i] == 0:
                 self.SpriteCanvas.set_colorkey(i)
+                break
                  
     def sync_draw_pal(self):
         for i in range(16):
@@ -282,11 +287,12 @@ class Pico8(object):
             yflip = True
 
         gfx_piece = pygame.transform.flip(gfx_piece,xflip,yflip)
-        
+
+ 
         self.SpriteCanvasSetPalt()
         self.SpriteCanvas.blit(gfx_piece,(x,y))
         
-        self.DrawCanvas.blit(gfx_piece,(x,y))        
+        self.DrawCanvas.blit(self.SpriteCanvas,(0,0))
 
     def sspr(self,sx,sy,sw,sh,dx,dy,dw,dh,flip_x,flip_y):
         if sx + sw > self.Width:
@@ -314,6 +320,7 @@ class Pico8(object):
         
         self.SpriteCanvasSetPalt()
         self.SpriteCanvas.blit(gfx_piece,(dx,dy))
+        self.DrawCanvas.blit(self.SpriteCanvas,(0,0))
 
     def draw_map(self,n,x,y):
         idx = n % 16
@@ -328,7 +335,8 @@ class Pico8(object):
 #        dest_rect = pygame.Rect(x,y,w_,h_)
         gfx_piece = self.gfx_surface.subsurface(start_x,start_y,w_,h_)
          
-        self.SpriteCanvas.blit(gfx_piece,(x,y))
+#        self.SpriteCanvas.blit(gfx_piece,(x,y))
+        self.DrawCanvas.blit(gfx_piece,(x,y))
 
     def map(self,cel_x,cel_y,sx,sy,cel_w,cel_h,bitmask):
         for y in range(0,cel_h):
@@ -375,17 +383,33 @@ class Pico8(object):
  
     def flip(self):
         if self.HWND != None:
-            self.DisplayCanvas.fill((3,5,10))
+
+            blit_rect = (self._camera_dx,self._camera_dy)
+#            self.DisplayCanvas.set_palette(self.display_palette)
+#            self.DisplayCanvas.set_colorkey(0)
             
-            self.DisplayCanvas.blit(self.TextCanvas,(0,0))            
-            self.DisplayCanvas.blit(self.DrawCanvas,(0,0))
-            self.DisplayCanvas.blit(self.SpriteCanvas,(0,0))
+#            self.DrawCanvas.blit(self.SpriteCanvas,(0,0))
+            self.DisplayCanvas.blit(self.DrawCanvas,blit_rect)
+
+#            self.DisplayCanvas.blit(self.SpriteCanvas,blit_rect)
+           
+#            self.DisplayCanvas.blit(self.SpriteCanvas,(0,0))
+#            self.DisplayCanvas.blit(self.TextCanvas,blit_rect)
+
             
             bigger = pygame.transform.scale(self.DisplayCanvas,(240,240))
+            #bigger2 = pygame.transform.scale(self.DrawCanvas,(240,240))
+
             self.HWND.blit(bigger,(0,0))
+#            self.HWND.blit(bigger2,(0,0))
+
             self.SpriteCanvas.fill(0)
             self.DrawCanvas.fill(0)
             self.TextCanvas.fill(0)
+            self.DisplayCanvas.fill((3,5,10))
+               
+            self._camera_dx = 0
+            self._camera_dy = 0
 
     def Print(self,text,x,y,c=None):
         self.color(c) 
@@ -400,7 +424,8 @@ class Pico8(object):
  
         imgText = self.Font.render(text,False, self.draw_palette_colors[ self.draw_palette[ self.pen_color]])
         self.TextCanvas.blit(imgText,(x,y))
- 
+        self.DrawCanvas.blit(self.TextCanvas,(0,0))
+
     def pset(self,x,y,c=0):
         if c > 15:
             return
@@ -423,10 +448,18 @@ class Pico8(object):
             self.cliprect = None
         else:    
             self.cliprect = pygame.Rect(x,y,w,h)
-        
+         
         self.DisplayCanvas.set_clip(self.cliprect)
 
+    def restore_clip(self):
+        self.DisplayCanvas.set_clip(self.cliprect)
+    
 
+    def restore_camera(self,x,y):
+        
+        self._camera_dx = x
+        self._camera_dy = y
+ 
     def cursor(self,x,y):
         self._cursor = [x,y]
 
@@ -658,6 +691,7 @@ class PygameThread(lisp.Lisper):
         self.intern('printh', lisp.SyntaxObject(self.printh))
         self.intern('pset', lisp.SyntaxObject(self.pset))
 
+        self.intern('restore_camera', lisp.SyntaxObject(self.restore_camera))
 
         self.intern('res', lisp.SyntaxObject(self.res))
         self.intern('res.done', lisp.SyntaxObject(self.res_done))
@@ -934,7 +968,14 @@ class PygameThread(lisp.Lisper):
             self.Pico8.clip(x,y,w,h)
 
         return "OK"
+    
+    def restore_camera(self,env,args):
+        x = self.get_arg(1,env,args,"int")
+        y = self.get_arg(1,env,args,"int")
+        self.Pico8.restore_camera(x,y)
         
+        return "OK"
+
     def printh(self,env,args):
         text = self.get_arg(0,env,args)
         self.Pico8.printh(text)

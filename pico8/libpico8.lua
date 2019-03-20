@@ -650,4 +650,21 @@ function api.clip(x,y,w,h)
 	end
 end
 
+
+function api.camera(x,y)
+  if type(x) == 'number' then 
+    pico8.camera_x = api.flr(x)
+    pico8.camera_y = api.flr(y)
+		
+  else 
+    pico8.camera_x = 0
+    pico8.camera_y = 0
+  end  
+	
+  server.restore_camera(pico8.camera_x,pico8.camera_y)
+
+end
+
+
+
 return api

@@ -27,11 +27,11 @@ function server.print(str,x,y,col)
 	end
 
 	if x ~= nil and col == nil  then 
-		thing = safe_format("(print \"%s\" %d %d)",str,x,y)
+		thing = safe_format("(print \"%s\" %d %d)",str,math.floor(x),math.floor(y))
 	end
 
 	if x ~= nil and col ~= nil then
-		thing = safe_format("(print \"%s\" %d %d %d)",str,x,y,col)
+		thing = safe_format("(print \"%s\" %d %d %d)",str,math.floor(x),math.floor(y),math.floor(col))
 	end
 
 	return TCP.send(thing)
@@ -231,6 +231,12 @@ function server.clip(x,y,w,h)
 	TCP.send(thing)
 
 end
+
+function server.restore_camera(x,y)
+	local thing = safe_format("(restore_camera %d %d)",x,y)
+	TCP.send(thing)
+end
+
 
 function server.printh(text)
 	local thing = safe_format("(printh \"%s\")",text)
