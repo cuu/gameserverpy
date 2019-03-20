@@ -107,11 +107,12 @@ class Pico8(object):
         
         self.SpriteCanvas.set_palette( self.palette) 
 
-#        self.DisplayCanvas.set_palette(self.palette)
+        self.DisplayCanvas.set_palette(self.palette)
 
         self.TextCanvas.set_colorkey(0)
         self.DrawCanvas.set_colorkey(0)
 
+        self.gfx_surface.set_palette(self.palette)
 
         self.map_matrix  = [0 for x in range(64*128)]
 
@@ -375,7 +376,7 @@ class Pico8(object):
     def flip(self):
         if self.HWND != None:
             self.DisplayCanvas.fill((3,5,10))
-
+            
             self.DisplayCanvas.blit(self.TextCanvas,(0,0))            
             self.DisplayCanvas.blit(self.DrawCanvas,(0,0))
             self.DisplayCanvas.blit(self.SpriteCanvas,(0,0))
@@ -509,8 +510,8 @@ class Pico8(object):
 
             self.sync_draw_pal()
 
-            #self.DisplayCanvas.set_palette(self.display_palette)
-            #self.DrawCanvas.set_palette(self.draw_palette_colors)
+            self.DisplayCanvas.set_palette(self.display_palette)
+            self.DrawCanvas.set_palette(self.draw_palette_colors)
             self.SpriteCanvas.set_palette(self.draw_palette_colors)
             self.TextCanvas.set_palette(self.draw_palette_colors)
  
@@ -522,7 +523,7 @@ class Pico8(object):
             self.display_palette[c0] = self.palette[c1]
             self._palette_modified = True
 
-            #self.DisplayCanvas.set_palette(self.display_palette)
+            self.DisplayCanvas.set_palette(self.display_palette)
         elif c1 != None and p == None:
             c0 = c0 % 16
             c1 = c1 % 16
@@ -531,7 +532,7 @@ class Pico8(object):
 
             self.sync_draw_pal()
 
-#            self.DrawCanvas.set_palette(self.draw_palette_colors)
+            self.DrawCanvas.set_palette(self.draw_palette_colors)
             self.SpriteCanvas.set_palette(self.draw_palette_colors)
             self.TextCanvas.set_palette(self.draw_palette_colors)
  
