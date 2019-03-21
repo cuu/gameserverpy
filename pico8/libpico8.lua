@@ -594,7 +594,9 @@ function api.printh(text,filename,overwrite)
 end
 
 function api.pal(c0,c1,p)
+
 		p = p or 0
+
 		if c1 == false then
 			c1 = nil
 		end

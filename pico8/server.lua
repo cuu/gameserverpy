@@ -175,11 +175,10 @@ function server.pal(c0,c1,p)
   local thing
   if type(c0) ~= 'number' then
     thing="(pal)"
+	end
 
-  elseif p ==1 and c1 ~= nil then
+  if c1 ~= nil then
     thing = safe_format("(pal %d %d %d)",c0,c1,p)
-  elseif c1 ~= nil then
-    thing = safe_format("(pal %d %d)",c0,c1)
   end
 
   TCP.send(thing)
