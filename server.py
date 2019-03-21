@@ -100,22 +100,14 @@ class Pico8(object):
         self.DisplayCanvas = pygame.Surface((self.Width,self.Height),0,8) ## last one,blit to the screen,display_palette
 
         self.DrawCanvas    = pygame.Surface((self.Width,self.Height),0,8) ##       no alpha, draw_palette  
-        self.TextCanvas    = pygame.Surface((self.Width,self.Height),0,8) ## text , no alpha, draw_palette 
-        self.SpriteCanvas  = pygame.Surface((self.Width,self.Height),0,8) ## Sprite, alpha,  draw_palette 
 
         self.gfx_surface = pygame.Surface((self.Width,self.Height),0,24) #sprite_sheet
 
-        self.DrawCanvas.set_palette( self.palette)
-        self.TextCanvas.set_palette( self.palette)
+        self.map_matrix  = [0 for x in range(64*128)]
         
-        self.SpriteCanvas.set_palette( self.palette) 
 
         self.DisplayCanvas.set_palette(self.palette)
-
-        self.TextCanvas.set_colorkey(0)
-        self.DrawCanvas.set_colorkey(0)
-
-        self.map_matrix  = [0 for x in range(64*128)]
+        self.DrawCanvas.set_palette(self.palette)
 
         self.spriteflags = [0 for x in range(256)]
         for i in range(16):
@@ -134,16 +126,8 @@ class Pico8(object):
         for i in range(4):
             self.memory[0x5f20+i] = 0
         
-        self.SpriteCanvasSetPalt()
         self.sync_draw_pal()
  
-    def SpriteCanvasSetPalt(self):
-        self.SpriteCanvas.set_colorkey()
-        for i in range(16):
-            if self.pal_transparent[i] == 0:
-                self.SpriteCanvas.set_colorkey(i)
-                break
-                 
     def sync_draw_pal(self):
         for i in range(16):
             self.draw_palette_colors[i] = self.palette[ self.draw_palette[i] ]
@@ -272,6 +256,7 @@ class Pico8(object):
         
         gfx_piece = pygame.Surface((_sw,_sh),0,8) 
         gfx_piece.set_palette(self.draw_palette_colors)
+        
         gfx_piece.set_colorkey(0)
  
         for _x in range(_sw):
@@ -292,11 +277,11 @@ class Pico8(object):
 
         gfx_piece = pygame.transform.flip(gfx_piece,xflip,yflip)
 
- 
-        self.SpriteCanvasSetPalt()
-        self.SpriteCanvas.blit(gfx_piece,(x,y))
+        for i in range(16):
+            if self.pal_transparent[i] == 0:
+                gfx_piece.set_colorkey(i)
         
-        self.DrawCanvas.blit(self.SpriteCanvas,(0,0))
+        self.DrawCanvas.blit(gfx_piece,(x,y))
 
     def sspr(self,sx,sy,sw,sh,dx,dy,dw,dh,flip_x,flip_y):
         if sx + sw > self.Width:
@@ -331,9 +316,11 @@ class Pico8(object):
         
         gfx_piece.set_palette(self.draw_palette_colors)
         
-        self.SpriteCanvasSetPalt()
-        self.SpriteCanvas.blit(gfx_piece,(dx,dy))
-        self.DrawCanvas.blit(self.SpriteCanvas,(0,0))
+        for i in range(16):
+            if self.pal_transparent[i] == 0:
+                gfx_piece.set_colorkey(i)
+        
+        self.DrawCanvas.blit(gfx_piece,(dx,dy))
 
     def draw_map(self,n,x,y):
         idx = n % 16
@@ -396,7 +383,7 @@ class Pico8(object):
             self.DrawCanvas.fill(0)
 
         elif color_index >=0 and color_index < 16:
-            self.DrawCanvas.fill(color_index)
+            self.DrawCanvas.fill(self.draw_palette[color_index])
         
         self._cursor=[0,0]
  
@@ -423,9 +410,6 @@ class Pico8(object):
             else:
                 self.HWND.blit(self.DisplayCanvas,(0,0))
 
-            self.SpriteCanvas.fill(0)
-            self.DrawCanvas.fill(0)
-            self.TextCanvas.fill(0)
             self.DisplayCanvas.fill((3,5,10))
                
             self._camera_dx = 0
@@ -443,8 +427,8 @@ class Pico8(object):
             self._cursor[1] = y
  
         imgText = self.Font.render(text,False, self.draw_palette_colors[ self.draw_palette[ self.pen_color]])
-        self.TextCanvas.blit(imgText,(x,y))
-        self.DrawCanvas.blit(self.TextCanvas,(0,0))
+        imgText.set_colorkey(0)
+        self.DrawCanvas.blit(imgText,(x,y))
 
     def pset(self,x,y,c=0):
         if c > 15:
@@ -502,7 +486,8 @@ class Pico8(object):
         if h < 0:
             h = -h
             y0=y0-h
-
+        
+         
         rect_ = pygame.Rect(x0,y0,w,h)
         pygame.draw.rect(self.DrawCanvas, self.draw_palette[self.pen_color], rect_)
     
@@ -541,15 +526,14 @@ class Pico8(object):
                 else:
                     self.pal_transparent[i] = 1
 
-            self.SpriteCanvasSetPalt()
         else:
             c = c % 16
-            if t == 0:
-                self.pal_transparent[c] = 1
-            else:
+            if t == 1:
                 self.pal_transparent[c] = 0
+            else:
+                if c != 0:
+                    self.pal_transparent[c] = 1
         
-            self.SpriteCanvasSetPalt()
  
     def pal(self,c0=None,c1=None,p=None):
         if c0 ==None:
@@ -565,10 +549,7 @@ class Pico8(object):
 
             self.DisplayCanvas.set_palette(self.display_palette)
             self.DrawCanvas.set_palette(self.draw_palette_colors)
-            self.SpriteCanvas.set_palette(self.draw_palette_colors)
-            self.TextCanvas.set_palette(self.draw_palette_colors)
             
- 
             self._palette_modified = False
 
         elif p == 1 and c1 != None:
@@ -586,10 +567,7 @@ class Pico8(object):
 
             self.sync_draw_pal()
 
-
             self.DrawCanvas.set_palette(self.draw_palette_colors)
-            self.SpriteCanvas.set_palette(self.draw_palette_colors)
-            self.TextCanvas.set_palette(self.draw_palette_colors)
  
 
     def fget(self,n,f=None):

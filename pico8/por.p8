@@ -167,8 +167,8 @@ function end_game()
 end
 
 function draw_end()
- cls()
- rectfill(0,0,127,127,0)
+-- cls()
+-- rectfill(0,0,127,127,0)
  map(8,0,48,8,4,3)
  print("your score was:"..score,32,40,8)
  if score<20 then
