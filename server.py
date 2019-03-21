@@ -411,6 +411,7 @@ class Pico8(object):
                 self.HWND.blit(self.DisplayCanvas,(0,0))
 
             self.DisplayCanvas.fill((3,5,10))
+            self.DrawCanvas.fill(0)
                
             self._camera_dx = 0
             self._camera_dy = 0
@@ -531,8 +532,7 @@ class Pico8(object):
             if t == 1:
                 self.pal_transparent[c] = 0
             else:
-                if c != 0:
-                    self.pal_transparent[c] = 1
+                self.pal_transparent[c] = 1
         
  
     def pal(self,c0=None,c1=None,p=None):
