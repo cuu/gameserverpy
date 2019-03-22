@@ -108,6 +108,8 @@ class Pico8(object):
 
         self.DisplayCanvas.set_palette(self.palette)
         self.DrawCanvas.set_palette(self.palette)
+        
+#        self.DrawCanvas.set_colorkey(0)
 
         self.spriteflags = [0 for x in range(256)]
         for i in range(16):
@@ -368,7 +370,9 @@ class Pico8(object):
     def mset(self,x,y,v):
         if x >= 0 and x < 128 and y >= 0 and y < 64: 
             self.map_matrix[ y + x*64] = v
-        
+
+        return "OK" 
+
     def color(self,c=None):
         if c == None:
             return self.pen_color
@@ -394,9 +398,12 @@ class Pico8(object):
             window_surface = pygame.display.get_surface()
             window_w = window_surface.get_width()
             window_h = window_surface.get_height()
-            
+
+            self.DisplayCanvas.fill((3,5,10,255))
+            self.DisplayCanvas.fill((0,0,0,0))
+            self.DisplayCanvas.set_palette(self.draw_palette_colors)  
             self.DisplayCanvas.blit(self.DrawCanvas,blit_rect)
-            
+
             if window_w > self.Width and window_h > self.Height:
                 bigger_border = window_w 
                 if bigger_border > window_h:
@@ -410,9 +417,9 @@ class Pico8(object):
             else:
                 self.HWND.blit(self.DisplayCanvas,(0,0))
 
-            self.DisplayCanvas.fill((3,5,10))
-            self.DrawCanvas.fill(0)
-               
+            self.DrawCanvas.fill((0,0,0,255))
+            
+            self.cliprect = None               
             self._camera_dx = 0
             self._camera_dy = 0
 

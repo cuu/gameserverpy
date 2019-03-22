@@ -57,7 +57,7 @@ function begin_game()
 	music_timer=0
 	start_game=false
 	music(0,0,7)
-	load_room(4,0)
+	load_room(0,0)
 end
 
 function level_index()

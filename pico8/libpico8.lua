@@ -387,6 +387,9 @@ function api.load_p8_text(filename)
   end)
   -- rewrite assignment operators
   lua = lua:gsub('(%S+)%s*([%+-%*/%%])=','%1 = %1 %2 ')
+	lua = lua:gsub("([,=%+%-&*%/])%.(%d-)", "%10.%2")
+	lua = lua:gsub("([%a_][%a%d_]-)=(%d+%.?%d*)", "%1=%2 ")
+	lua = lua:gsub("(%d+%.?%d+)(%a)", "%1 %2")		
 
   log('finished loading cart',filename)
 
@@ -405,6 +408,10 @@ function api.load_p8_text(filename)
 end
 
 function api.spr(n,x,y,w,h,flip_x,flip_y)
+	if n == nil then
+		return
+	end
+
   n = api.flr(n)
   w = w or 1
   h = h or 1
@@ -497,16 +504,23 @@ function api.add(a,v)
 end
 
 function api.del(a,dv)
-  if a == nil then 
-    warning('del from nil')
-    return
-  end  
-  for i,v in ipairs(a) do
-    if v==dv then 
-      table.remove(a,i)
-    end  
-  end  
+	if a == nil then
+		warning("del from nil")
+		return false
+	end
+
+	for i,v in pairs(a) do
+		if v==dv then
+	  	a[i]=a[#a]
+		  a[#a]=nil
+			break
+		end
+	end
+
+	return true
 end
+
+
 
 function warning(msg)
   log(debug.traceback('WARNING: '..msg,3))
@@ -516,11 +530,21 @@ function api.foreach(a,f)
   if not a then 
     warning('foreach got a nil value')
     return
-  end  
-  for i,v in ipairs(a) do
-    f(v) 
-  end  
+  end
+	
+	local len = #a
+	for i,v in ipairs(a) do
+		f(v)
+		if #a < len then
+			api.foreach(a,f)
+			break
+		end
+	end
+
 end
+
+
+
 
 function api.count(a)
   return #a
@@ -626,6 +650,9 @@ end
 function api.fget(n,f)
   if n == nil then return nil end
   local ret =  tonumber( server.fget(n,f) )
+	if ret == nil then
+		return false
+	end
 --	print(n,f,ret)
 	if ret == 0 then
 		return false
