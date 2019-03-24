@@ -273,10 +273,10 @@ class Pico8(object):
         xflip = False
         yflip = False
         if flip_x > 0:
-            xfilp = True
+            xflip = True
         if flip_y > 0:
             yflip = True
-
+        
         gfx_piece = pygame.transform.flip(gfx_piece,xflip,yflip)
 
         for i in range(16):
@@ -468,10 +468,9 @@ class Pico8(object):
     
 
     def restore_camera(self,x,y):
-        
         self._camera_dx = x
         self._camera_dy = y
- 
+     
     def cursor(self,x,y):
         self._cursor = [x,y]
 
