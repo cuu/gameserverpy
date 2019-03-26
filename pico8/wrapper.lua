@@ -104,7 +104,8 @@ function new_sandbox()
 		printh = api.printh,
 		tostr  = api.tostr,
     mapdraw = api.map,
-		run    = api.run
+		run    = api.run,
+		string = string
 
    }
 end

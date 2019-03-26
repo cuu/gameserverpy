@@ -210,8 +210,10 @@ function server.fget(n,f)
   else
     thing = safe_format("(fget %d %d)",n,f)
   end
-  
-  return TCP.send(thing)
+ 	
+	local ret = TCP.send(thing)
+	
+	return ret 
 end
 
 function server.reboot()

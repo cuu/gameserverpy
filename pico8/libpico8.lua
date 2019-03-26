@@ -119,7 +119,10 @@ function api.mget(x,y)
 	if x == nil or y == nil then return 0 end
 
 	local ret = server.mget(x,y)
-	return tonumber(ret)
+	ret = tonumber(ret)
+
+	return ret
+
 end
 
 function api.mset(x,y,v)
@@ -320,10 +323,38 @@ function api.load_p8_text(filename)
     if gff_end == nil then
       gff_end = #data
     else 
-      gff_end = gff_end - 2
+      gff_end = gff_end-1
     end
 
     gffdata = data:sub(gff_start,gff_end)
+
+		local sprite = 0
+
+		local next_line = 1
+		while next_line do
+			local end_of_line = gffdata:find(eol_chars,next_line)
+			if end_of_line == nil then break end
+			end_of_line = end_of_line - 1
+			local line = gffdata:sub(next_line,end_of_line)
+			if version <= 2 then
+				for i=1,#line do
+					local v = line:sub(i)
+					v = tonumber(v,16)
+					pico8.spriteflags[sprite] = v
+					sprite = sprite + 1
+				end
+			else
+				for i=1,#line,2 do
+					local v = line:sub(i,i+1)
+					v = tonumber(v,16)
+					pico8.spriteflags[sprite] = v
+					sprite = sprite + 1
+				end
+			end
+			next_line = gffdata:find(eol_chars,end_of_line)+#eol_chars
+		
+		end
+		
   end
     -- convert the tile data to a table
 
@@ -398,7 +429,7 @@ function api.load_p8_text(filename)
   server.send_pico8_version(version)
 
   server.send_resource("gfx",gfxdata)
-  server.send_resource("gff",gffdata)
+  server.send_resource("gff",gffdata:sub(1,#gffdata-1))
   server.send_resource("sfx",sfxdata)
   server.send_resource("map",mapdata)
   server.send_resource("music",musicdata)
@@ -511,8 +542,9 @@ function api.del(a,dv)
 
 	for i,v in pairs(a) do
 		if v==dv then
-	  	a[i]=a[#a]
-		  a[#a]=nil
+	  	--a[i]=a[#a]
+		  --a[#a]=nil
+			table.remove(a,i)
 			break
 		end
 	end
@@ -533,12 +565,18 @@ function api.foreach(a,f)
   end
 	
 	local len = #a
+	local j = 1
+	
 	for i,v in ipairs(a) do
 		f(v)
 		if #a < len then
-			api.foreach(a,f)
 			break
 		end
+		j = j + 1	
+	end
+	
+	if j < len then
+		api.foreach(a,f)
 	end
 
 end
@@ -648,19 +686,41 @@ function api.palt(c,t)
 end  
 
 function api.fget(n,f)
+	if n == nil then return nil end
+	if f ~= nil then
+		-- return just that bit as a boolean
+		if not pico8.spriteflags[api.flr(n)] then
+			print(string.format('fget(%d,%d)',n,f))
+			return 0
+		end
+		return api.band(pico8.spriteflags[api.flr(n)],api.shl(1,api.flr(f))) ~= 0
+	end
+	return pico8.spriteflags[api.flr(n)]
+
+end
+
+function api.fget_remote(n,f)
   if n == nil then return nil end
-  local ret =  tonumber( server.fget(n,f) )
-	if ret == nil then
-		return false
+	
+	local server_ret = server.fget(n,f)
+	
+  local ret =  tonumber( server_ret )
+
+	print(server_ret)	
+		
+	if ret == nil or ret == -1  then
+		return nil
 	end
---	print(n,f,ret)
+	
+	if ret ~= nil and ret > 0 then
+		return ret
+	end
+	
 	if ret == 0 then
-		return false
+		return nil
 	end
-	if ret > 0 then
-		return true
-	end
---		return 1
+
+
 end 
 
 function api.music(n,fade_len,channel_mask)

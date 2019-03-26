@@ -579,15 +579,16 @@ class Pico8(object):
     def fget(self,n,f=None):
         if f != None:
             if n > 255:
-                return "0"
+                return "-1"
             
             ret = self.spriteflags[n] & (1 << f)
+            #print(ret,n,f,1<<f, self.spriteflags[n])
             return str(ret)
         else:
             if n < 255:
                 return str(self.spriteflags[n])
             else:
-                return "0"
+                return "-1"
     
     def reboot(self):
         self.uptime = time.time()
